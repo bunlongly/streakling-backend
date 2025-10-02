@@ -1,0 +1,35 @@
+# Node
+node_modules/
+npm-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+.eslintcache
+
+# TypeScript
+dist/
+*.tsbuildinfo
+
+# Env & secrets
+.env
+.env.*
+!.env.example
+
+# Prisma
+.prisma/
+# If you ever use SQLite locally:
+*.db
+*.db-journal
+
+# Logs & temp
+logs/
+*.log
+tmp/
+.cache/
+
+# Editors/OS
+.DS_Store
+.vscode/*
+!.vscode/extensions.json
+
+# Misc
+coverage/
