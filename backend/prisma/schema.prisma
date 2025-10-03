@@ -1,26 +1,77 @@
+// prisma/schema.prisma
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
-  provider = "mysql"
-  url      = env("DATABASE_URL")
+  provider = "mysql"              
+  url      = env("DATABASE_URL")   
+}
+
+enum CardStatus {
+  STUDENT
+  GRADUATE
+  WORKING
+}
+
+enum PublishStatus {
+  DRAFT
+  PUBLISHED
 }
 
 model User {
-  id          String   @id @default(cuid())
-  clerkId     String   @unique
-  username    String?  @unique
-  email       String?  @unique
-  displayName String
-  avatarUrl   String?
-  country     String?
-  religion    String?
-  phone       String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id            String            @id @default(cuid())
+  clerkId       String            @unique
+  username      String?           @unique
+  email         String?           @unique
+  displayName   String
+  avatarUrl     String?
+  country       String?
+  religion      String?
+  phone         String?
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+  digitalCards  DigitalNameCard[]
+}
 
-  @@index([clerkId])
-  @@index([username])
-  @@index([email])
+model DigitalNameCard {
+  id            String         @id @default(cuid())
+  userId        String
+  slug          String         // vanity slug (globally unique)
+  firstName     String
+  lastName      String
+  appName       String
+  status        CardStatus
+  role          String
+  shortBio      String
+  company       String?
+  university    String?
+  country       String?
+  religion      String?        // sensitive
+  phone         String?        // sensitive
+
+  // per-field visibility
+  showPhone     Boolean        @default(false)
+  showReligion  Boolean        @default(false)
+  showCompany   Boolean        @default(true)
+  showUniversity Boolean       @default(true)
+  showCountry   Boolean        @default(true)
+
+  avatarKey     String?
+  bannerKey     String?
+  publishStatus PublishStatus  @default(DRAFT)
+  publishedAt   DateTime?
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  user          User           @relation(fields: [userId], references: [id])
+
+  @@unique([userId, slug])
+
+  // add global vanity slug unique
+  @@unique([slug])
+
+  @@index([publishStatus, publishedAt])
+  @@index([appName])
+
 }

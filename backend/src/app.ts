@@ -11,6 +11,7 @@ import indexRoutes from './routes/indexRoutes.js';
 import healthRoutes from './routes/healthRoutes.js';
 import sessionRoutes from './routes/sessionRoutes.js';
 import profileRoutes from './routes/profileRoutes.js';
+import digitalCardRoutes from './routes/digitalNameCardRoutes.js';
 import { errorHandler } from './middlewares/error.js';
 
 const app = express();
@@ -33,6 +34,7 @@ app.use('/api', healthRoutes);
 app.use('/api', indexRoutes);
 app.use('/api', sessionRoutes);
 app.use('/api', profileRoutes);
+app.use('/api', digitalCardRoutes);
 
 /* 404 */
 app.use((_req, res) => {
