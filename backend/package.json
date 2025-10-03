@@ -12,6 +12,8 @@
     "prisma:studio": "prisma studio"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.901.0",
+    "@aws-sdk/s3-request-presigner": "^3.901.0",
     "@clerk/backend": "^1.7.2",
     "@prisma/client": "^5.20.0",
     "cookie-parser": "^1.4.7",

@@ -12,6 +12,7 @@ import healthRoutes from './routes/healthRoutes.js';
 import sessionRoutes from './routes/sessionRoutes.js';
 import profileRoutes from './routes/profileRoutes.js';
 import digitalCardRoutes from './routes/digitalNameCardRoutes.js';
+import uploadsRoutes from './routes/uploadRoutes.js';
 import { errorHandler } from './middlewares/error.js';
 
 const app = express();
@@ -30,6 +31,9 @@ app.use(rateLimit({ windowMs: 60_000, limit: 120, standardHeaders: 'draft-7', le
 app.use(attachUserFromSession);
 
 /* Routes */
+
+
+app.use('/api', uploadsRoutes);
 app.use('/api', healthRoutes);
 app.use('/api', indexRoutes);
 app.use('/api', sessionRoutes);
