@@ -16,7 +16,20 @@ enum CardStatus {
 
 enum PublishStatus {
   DRAFT
+  PRIVATE
   PUBLISHED
+}
+
+enum SocialPlatform {
+  TWITTER
+  INSTAGRAM
+  FACEBOOK
+  LINKEDIN
+  TIKTOK
+  YOUTUBE
+  GITHUB
+  PERSONAL
+  OTHER
 }
 
 model User {
@@ -66,6 +79,8 @@ model DigitalNameCard {
 
   user          User           @relation(fields: [userId], references: [id])
 
+  socials        SocialAccount[]
+
   @@unique([userId, slug])
 
   // add global vanity slug unique
@@ -74,4 +89,24 @@ model DigitalNameCard {
   @@index([publishStatus, publishedAt])
   @@index([appName])
 
+}
+
+
+
+model SocialAccount {
+  id        String          @id @default(cuid())
+  cardId    String
+  platform  SocialPlatform
+  handle    String?         // e.g. @bunlong
+  url       String?         // full URL
+  label     String?         // custom label for OTHER/ PERSONAL etc.
+  isPublic  Boolean         @default(true)
+  sortOrder Int             @default(0)
+
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+
+  card      DigitalNameCard @relation(fields: [cardId], references: [id])
+
+  @@index([cardId, isPublic, sortOrder])
 }

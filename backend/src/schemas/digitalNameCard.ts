@@ -1,47 +1,63 @@
+// src/schemas/digitalNameCard.ts
 import { z } from 'zod';
 
-export const cardStatusEnum = z.enum(['STUDENT', 'GRADUATE', 'WORKING']);
-export const publishStatusEnum = z.enum(['DRAFT', 'PUBLISHED']);
+export const socialPlatformEnum = z.enum([
+  'TWITTER',
+  'INSTAGRAM',
+  'FACEBOOK',
+  'LINKEDIN',
+  'TIKTOK',
+  'YOUTUBE',
+  'GITHUB',
+  'PERSONAL',
+  'OTHER'
+]);
 
-export const slugSchema = z
-  .string()
-  .min(1, 'Slug is required')
-  .max(60, 'Max 60 characters')
-  .regex(/^[a-z0-9-]+$/, 'Use lowercase letters, numbers, and hyphens only');
+export const socialAccountSchema = z.object({
+  id: z.string().cuid().optional(), // only for update (client may send)
+  platform: socialPlatformEnum,
+  handle: z.string().min(1).max(100).optional(),
+  url: z.string().url().optional(),
+  label: z.string().max(50).optional(), // used when platform=OTHER/PERSONAL
+  isPublic: z.boolean().default(true).optional(),
+  sortOrder: z.number().int().min(0).default(0).optional()
+});
 
 export const createDigitalCardSchema = z.object({
-  slug: slugSchema,
+  slug: z.string().min(3).max(64),
   firstName: z.string().min(1),
   lastName: z.string().min(1),
-  appName: z.string().min(1).max(50),
-  status: cardStatusEnum,
-  role: z.string().min(1).max(80),
-  shortBio: z.string().max(200),
+  appName: z.string().min(1),
+  status: z.enum(['STUDENT', 'GRADUATE', 'WORKING']),
+  role: z.string().min(1),
+  shortBio: z.string().min(1).max(300),
+  company: z.string().optional(),
+  university: z.string().optional(),
+  country: z.string().optional(),
+  religion: z.string().optional(),
+  phone: z.string().optional(),
 
-  company: z.string().optional().nullable(),
-  university: z.string().optional().nullable(),
-  country: z.string().optional().nullable(),
-  religion: z.string().optional().nullable(),
-  phone: z.string().optional().nullable(),
+  showPhone: z.boolean().optional(),
+  showReligion: z.boolean().optional(),
+  showCompany: z.boolean().optional(),
+  showUniversity: z.boolean().optional(),
+  showCountry: z.boolean().optional(),
 
-  avatarKey: z.string().optional().nullable(),
-  bannerKey: z.string().optional().nullable(),
+  avatarKey: z.string().optional(),
+  bannerKey: z.string().optional(),
+  publishStatus: z.enum(['DRAFT', 'PRIVATE', 'PUBLISHED']).default('DRAFT'),
 
-  // visibility flags
-  showPhone: z.boolean().optional().default(false),
-  showReligion: z.boolean().optional().default(false),
-  showCompany: z.boolean().optional().default(true),
-  showUniversity: z.boolean().optional().default(true),
-  showCountry: z.boolean().optional().default(true),
-
-  publishStatus: publishStatusEnum.default('DRAFT')
+  // NEW
+  socials: z.array(socialAccountSchema).optional().default([])
 });
+
+export type CreateDigitalCardInput = z.infer<typeof createDigitalCardSchema>;
 
 export const updateDigitalCardSchema = createDigitalCardSchema
   .partial()
   .extend({
-    publishStatus: publishStatusEnum.optional()
+    // optional strategy: replace all socials in update
+    replaceSocials: z.boolean().optional()
   });
 
-export type CreateDigitalCardInput = z.infer<typeof createDigitalCardSchema>;
 export type UpdateDigitalCardInput = z.infer<typeof updateDigitalCardSchema>;
