@@ -45,6 +45,7 @@ model User {
   createdAt     DateTime          @default(now())
   updatedAt     DateTime          @updatedAt
   digitalCards  DigitalNameCard[]
+  portfolios    Portfolio[] 
 }
 
 model DigitalNameCard {
@@ -109,4 +110,48 @@ model SocialAccount {
   card      DigitalNameCard @relation(fields: [cardId], references: [id])
 
   @@index([cardId, isPublic, sortOrder])
+}
+
+
+
+model Portfolio {
+  id            String           @id @default(cuid())
+  userId        String
+  title         String
+  description   String?
+  mainImageKey  String?
+  tags          Json?   
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+
+  user          User             @relation(fields: [userId], references: [id])
+  subImages     PortfolioImage[]
+  videoLinks    PortfolioVideo[]
+
+  @@index([userId, createdAt])
+}
+
+model PortfolioImage {
+  id           String     @id @default(cuid())
+  portfolioId  String
+  key          String     // S3 key
+  url          String     // public URL (CF/S3)
+  sortOrder    Int        @default(0)
+
+  portfolio    Portfolio  @relation(fields: [portfolioId], references: [id])
+
+  @@index([portfolioId, sortOrder])
+}
+
+model PortfolioVideo {
+  id               String          @id @default(cuid())
+  portfolioId      String
+  platform         SocialPlatform  // reuse existing enum
+  url              String          // TikTok/YouTube/other link
+  durationSeconds  Int?            // we’ll validate ≤ 180 in app layer
+  thumbnailUrl     String?         // optional cached thumb
+
+  portfolio        Portfolio       @relation(fields: [portfolioId], references: [id])
+
+  @@index([portfolioId, platform])
 }

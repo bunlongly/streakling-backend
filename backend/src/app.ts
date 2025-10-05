@@ -14,6 +14,7 @@ import profileRoutes from './routes/profileRoutes.js';
 import digitalCardRoutes from './routes/digitalNameCardRoutes.js';
 import uploadsRoutes from './routes/uploadRoutes.js';
 import { errorHandler } from './middlewares/error.js';
+import portfolioRoutes from './routes/portfolioRoutes.js';
 
 const app = express();
 
@@ -39,6 +40,7 @@ app.use('/api', indexRoutes);
 app.use('/api', sessionRoutes);
 app.use('/api', profileRoutes);
 app.use('/api', digitalCardRoutes);
+app.use('/api', portfolioRoutes);
 
 /* 404 */
 app.use((_req, res) => {
