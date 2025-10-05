@@ -1,6 +1,16 @@
 // src/schemas/digitalNameCard.ts
 import { z } from 'zod';
 
+/** Helper: treat empty string as undefined so optional() works with form inputs */
+const emptyToUndef = <T extends z.ZodTypeAny>(schema: T) =>
+  z.preprocess(
+    v => (typeof v === 'string' && v.trim() === '' ? undefined : v),
+    schema
+  );
+
+const emptyStr = emptyToUndef(z.string());
+const emptyUrl = emptyToUndef(z.string().url());
+
 export const socialPlatformEnum = z.enum([
   'TWITTER',
   'INSTAGRAM',
@@ -14,11 +24,18 @@ export const socialPlatformEnum = z.enum([
 ]);
 
 export const socialAccountSchema = z.object({
-  id: z.string().cuid().optional(), // only for update (client may send)
+  // If you strictly use CUID in Prisma, keep the next line as-is.
+  // If your DB might produce uuid/cuid2/other strings, use the union below.
+  // id: z.string().cuid().optional(),
+  id: z.union([z.string().cuid(), z.string().uuid(), z.string()]).optional(),
+
   platform: socialPlatformEnum,
-  handle: z.string().min(1).max(100).optional(),
-  url: z.string().url().optional(),
-  label: z.string().max(50).optional(), // used when platform=OTHER/PERSONAL
+
+  // Optional text fields ('' -> undefined so optional passes)
+  handle: emptyToUndef(z.string().min(1).max(100)).optional(),
+  url: emptyUrl.optional(),
+  label: emptyToUndef(z.string().max(50)).optional(),
+
   isPublic: z.boolean().default(true).optional(),
   sortOrder: z.number().int().min(0).default(0).optional()
 });
@@ -31,23 +48,27 @@ export const createDigitalCardSchema = z.object({
   status: z.enum(['STUDENT', 'GRADUATE', 'WORKING']),
   role: z.string().min(1),
   shortBio: z.string().min(1).max(300),
-  company: z.string().optional(),
-  university: z.string().optional(),
-  country: z.string().optional(),
-  religion: z.string().optional(),
-  phone: z.string().optional(),
 
+  // Optional profile fields ('' -> undefined)
+  company: emptyStr.optional(),
+  university: emptyStr.optional(),
+  country: emptyStr.optional(),
+  religion: emptyStr.optional(),
+  phone: emptyStr.optional(),
+
+  // Optional visibility flags—client sends true/false already
   showPhone: z.boolean().optional(),
   showReligion: z.boolean().optional(),
   showCompany: z.boolean().optional(),
   showUniversity: z.boolean().optional(),
   showCountry: z.boolean().optional(),
 
-  avatarKey: z.string().optional(),
-  bannerKey: z.string().optional(),
+  // Media keys ('' -> undefined)
+  avatarKey: emptyStr.optional(),
+  bannerKey: emptyStr.optional(),
+
   publishStatus: z.enum(['DRAFT', 'PRIVATE', 'PUBLISHED']).default('DRAFT'),
 
-  // NEW
   socials: z.array(socialAccountSchema).optional().default([])
 });
 
@@ -56,7 +77,10 @@ export type CreateDigitalCardInput = z.infer<typeof createDigitalCardSchema>;
 export const updateDigitalCardSchema = createDigitalCardSchema
   .partial()
   .extend({
-    // optional strategy: replace all socials in update
+    /**
+     * If true, the server should replace existing socials with the provided array.
+     * If false/undefined, the server may do a partial update/merge strategy.
+     */
     replaceSocials: z.boolean().optional()
   });
 

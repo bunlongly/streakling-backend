@@ -144,80 +144,133 @@ export async function listMyCards(req: Request, res: Response) {
   }
 }
 
-/** PATCH /api/digital-name-cards/:id — owner update */
-export async function updateCard(req: Request, res: Response) {
+/** GET /api/digital-name-cards/:id — owner fetch single (for edit form) */
+export async function getMyCardById(req: Request, res: Response) {
   if (!req.user?.uid) return sendUnauthorized(res);
   const { id } = req.params;
-  const input = req.body as UpdateDigitalCardInput;
 
   try {
     const card = await prisma.digitalNameCard.findUnique({
       where: { id },
       include: { socials: true }
     });
-    if (!card || card.userId !== req.user.uid)
+    if (!card || card.userId !== req.user.uid) {
       return sendNotFound(res, 'Card not found');
+    }
 
-    // if slug is changing, ensure global uniqueness
-    if (input.slug && input.slug !== card.slug) {
-      const exists = await prisma.digitalNameCard.findUnique({
-        where: { slug: input.slug },
-        select: { id: true }
+    return sendSuccess(res, serializeCard(card, { isOwner: true }), 'My card');
+  } catch (e: any) {
+    return sendError(res, e?.message ?? 'Failed to fetch card');
+  }
+}
+
+/** PATCH /api/digital-name-cards/:id — owner update (controller-only ownership) */
+export async function updateCard(req: Request, res: Response) {
+  if (!req.user?.uid) return sendUnauthorized(res);
+  const { id } = req.params;
+  const input = req.body as UpdateDigitalCardInput;
+
+  try {
+    const updated = await prisma.$transaction(async tx => {
+      // 1) load + own check
+      const card = await tx.digitalNameCard.findUnique({
+        where: { id },
+        include: { socials: true }
       });
-      if (exists) return sendConflict(res, 'Slug already exists');
-    }
-
-    // split socials from other patch fields
-    const { socials, ...patch } = input;
-
-    // manage publishedAt transitions
-    const nextPublishedAt =
-      patch.publishStatus === 'PUBLISHED' && !card.publishedAt
-        ? new Date()
-        : patch.publishStatus === 'DRAFT'
-        ? null
-        : card.publishedAt;
-
-    // update card base fields
-    await prisma.digitalNameCard.update({
-      where: { id },
-      data: {
-        ...patch,
-        publishedAt: nextPublishedAt
+      if (!card || card.userId !== req.user!.uid) {
+        // throw to keep the transaction clean
+        throw new Error('NOT_FOUND');
       }
-    });
 
-    // If socials array is provided, replace existing socials with the new set
-    if (Array.isArray(socials)) {
-      await prisma.socialAccount.deleteMany({ where: { cardId: id } });
-      if (socials.length > 0) {
-        await prisma.socialAccount.createMany({
-          data: socials.map(s => ({
-            cardId: id,
-            platform: s.platform,
-            handle: s.handle,
-            url: s.url,
-            label: s.label,
-            isPublic: typeof s.isPublic === 'boolean' ? s.isPublic : true,
-            sortOrder: typeof s.sortOrder === 'number' ? s.sortOrder : 0
-          }))
+      // 2) slug uniqueness (if changed)
+      if (input.slug && input.slug !== card.slug) {
+        const exists = await tx.digitalNameCard.findUnique({
+          where: { slug: input.slug },
+          select: { id: true }
         });
+        if (exists) throw new Error('SLUG_EXISTS');
       }
-    }
 
-    // re-fetch with socials for response
-    const finalCard = await prisma.digitalNameCard.findUnique({
-      where: { id },
-      include: { socials: true }
+      // 3) split socials from base patch
+      const { socials, ...patch } = input;
+
+      // 4) manage publishedAt transitions
+      const nextPublishedAt =
+        patch.publishStatus === 'PUBLISHED' && !card.publishedAt
+          ? new Date()
+          : patch.publishStatus === 'DRAFT'
+          ? null
+          : card.publishedAt;
+
+      // 5) update base fields
+      await tx.digitalNameCard.update({
+        where: { id },
+        data: {
+          ...patch,
+          publishedAt: nextPublishedAt
+        }
+      });
+
+      // 6) replace socials if provided
+      if (Array.isArray(socials)) {
+        await tx.socialAccount.deleteMany({ where: { cardId: id } });
+        if (socials.length > 0) {
+          await tx.socialAccount.createMany({
+            data: socials.map(s => ({
+              cardId: id,
+              platform: s.platform,
+              handle: s.handle,
+              url: s.url,
+              label: s.label,
+              isPublic: typeof s.isPublic === 'boolean' ? s.isPublic : true,
+              sortOrder: typeof s.sortOrder === 'number' ? s.sortOrder : 0
+            }))
+          });
+        }
+      }
+
+      // 7) return final
+      return tx.digitalNameCard.findUnique({
+        where: { id },
+        include: { socials: true }
+      });
     });
 
     return sendSuccess(
       res,
-      serializeCard(finalCard, { isOwner: true }),
+      serializeCard(updated, { isOwner: true }),
       'Card updated'
     );
   } catch (e: any) {
+    if (e?.message === 'NOT_FOUND') return sendNotFound(res, 'Card not found');
+    if (e?.message === 'SLUG_EXISTS')
+      return sendConflict(res, 'Slug already exists');
     return sendError(res, e?.message ?? 'Failed to update card');
+  }
+}
+
+/** DELETE /api/digital-name-cards/:id — owner delete (controller-only ownership) */
+export async function deleteCard(req: Request, res: Response) {
+  if (!req.user?.uid) return sendUnauthorized(res);
+  const { id } = req.params;
+
+  try {
+    await prisma.$transaction(async tx => {
+      // own check
+      const card = await tx.digitalNameCard.findUnique({
+        where: { id },
+        select: { id: true, userId: true }
+      });
+      if (!card || card.userId !== req.user!.uid) throw new Error('NOT_FOUND');
+
+      await tx.socialAccount.deleteMany({ where: { cardId: id } });
+      await tx.digitalNameCard.delete({ where: { id } });
+    });
+
+    return sendSuccess(res, { id }, 'Card deleted');
+  } catch (e: any) {
+    if (e?.message === 'NOT_FOUND') return sendNotFound(res, 'Card not found');
+    return sendError(res, e?.message ?? 'Failed to delete card');
   }
 }
 

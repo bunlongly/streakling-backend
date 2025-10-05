@@ -9,7 +9,9 @@ import {
   createCard,
   getPublicCardBySlug,
   listMyCards,
-  updateCard
+  updateCard,
+  getMyCardById,
+  deleteCard
 } from '../controllers/digitalNameCardController';
 
 const router = Router();
@@ -22,6 +24,10 @@ router.post(
   createCard
 );
 router.get('/me/digital-name-cards', requireSession, listMyCards);
+
+// handy for edit page prefill
+router.get('/digital-name-cards/:id', requireSession, getMyCardById);
+
 router.patch(
   '/digital-name-cards/:id',
   requireSession,
@@ -32,5 +38,7 @@ router.patch(
 /** Public */
 // Public by vanity slug
 router.get('/digital-name-card/slug/:slug', getPublicCardBySlug);
+
+router.delete('/digital-name-cards/:id', requireSession, deleteCard);
 
 export default router;
