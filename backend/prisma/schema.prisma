@@ -117,25 +117,38 @@ model SocialAccount {
 model Portfolio {
   id            String           @id @default(cuid())
   userId        String
+
+  slug          String
+
   title         String
   description   String?
   mainImageKey  String?
-  tags          Json?   
+  tags          Json?
+
+
+  publishStatus PublishStatus  @default(DRAFT)
+  publishedAt   DateTime?
+
   createdAt     DateTime         @default(now())
   updatedAt     DateTime         @updatedAt
 
   user          User             @relation(fields: [userId], references: [id])
+
   subImages     PortfolioImage[]
   videoLinks    PortfolioVideo[]
+  projects      PortfolioProject[]
 
+  @@unique([userId, slug])     
+  @@unique([slug])             
   @@index([userId, createdAt])
+  @@index([publishStatus, publishedAt])
 }
 
 model PortfolioImage {
   id           String     @id @default(cuid())
   portfolioId  String
-  key          String     // S3 key
-  url          String     // public URL (CF/S3)
+  key          String
+  url          String
   sortOrder    Int        @default(0)
 
   portfolio    Portfolio  @relation(fields: [portfolioId], references: [id])
@@ -144,14 +157,56 @@ model PortfolioImage {
 }
 
 model PortfolioVideo {
-  id               String          @id @default(cuid())
-  portfolioId      String
-  platform         SocialPlatform  // reuse existing enum
-  url              String          // TikTok/YouTube/other link
-  durationSeconds  Int?            // we’ll validate ≤ 180 in app layer
-  thumbnailUrl     String?         // optional cached thumb
+  id           String          @id @default(cuid())
+  portfolioId  String
+  platform     SocialPlatform
+  url          String
+  description  String?         // keep short text only
 
-  portfolio        Portfolio       @relation(fields: [portfolioId], references: [id])
+  portfolio    Portfolio       @relation(fields: [portfolioId], references: [id])
 
   @@index([portfolioId, platform])
+}
+
+// ---------------- NEW MODELS ----------------
+
+model PortfolioProject {
+  id             String                 @id @default(cuid())
+  portfolioId    String
+  title          String
+  description    String?
+  mainImageKey   String?
+  tags           Json?
+  createdAt      DateTime               @default(now())
+  updatedAt      DateTime               @updatedAt
+
+  portfolio   Portfolio @relation(fields: [portfolioId], references: [id], onDelete: Cascade)
+  subImages      PortfolioProjectImage[]
+  videoLinks     PortfolioProjectVideo[]
+
+  @@index([portfolioId, createdAt])
+}
+
+model PortfolioProjectImage {
+  id          String              @id @default(cuid())
+  projectId   String
+  key         String
+  url         String
+  sortOrder   Int                 @default(0)
+  
+  project   PortfolioProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId, sortOrder])
+}
+
+model PortfolioProjectVideo {
+  id          String              @id @default(cuid())
+  projectId   String
+  platform    SocialPlatform
+  url         String
+  description String?
+
+  project   PortfolioProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId, platform])
 }

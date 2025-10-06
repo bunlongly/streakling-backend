@@ -1,3 +1,4 @@
+// src/routes/portfolioRoutes.ts
 import { Router } from 'express';
 import { requireSession } from '../middlewares/session';
 import { validateBody } from '../middlewares/validate';
@@ -10,26 +11,30 @@ import {
   listPortfoliosMine,
   getMyPortfolioById,
   updatePortfolio,
-  deletePortfolio
+  //   deletePortfolio,
+  getPublicPortfolioBySlug
 } from '../controllers/portfolioController';
 
 const router = Router();
 
-/** Owner CRUD (no /me prefix to match your digital-name-cards style) */
+/** ---- PUBLIC ---- */
+router.get('/portfolios/slug/:slug', getPublicPortfolioBySlug); // ← no session
+
+/** ---- AUTHENTICATED ---- */
+router.use(requireSession);
+
 router.post(
   '/portfolios',
-  requireSession,
   validateBody(createPortfolioSchema),
   createPortfolio
 );
-router.get('/portfolios', requireSession, listPortfoliosMine);
-router.get('/portfolios/:id', requireSession, getMyPortfolioById);
+router.get('/portfolios', listPortfoliosMine);
+router.get('/portfolios/:id', getMyPortfolioById);
 router.patch(
   '/portfolios/:id',
-  requireSession,
   validateBody(updatePortfolioSchema),
   updatePortfolio
 );
-router.delete('/portfolios/:id', requireSession, deletePortfolio);
+// router.delete('/portfolios/:id', deletePortfolio);
 
 export default router;

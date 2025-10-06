@@ -26,13 +26,19 @@ app.use(cookieParser());
 app.use(morgan(env.NODE_ENV === 'development' ? 'dev' : 'combined'));
 
 /* Rate limit */
-app.use(rateLimit({ windowMs: 60_000, limit: 120, standardHeaders: 'draft-7', legacyHeaders: false }));
+app.use(
+  rateLimit({
+    windowMs: 60_000,
+    limit: 120,
+    standardHeaders: 'draft-7',
+    legacyHeaders: false
+  })
+);
 
 /* Attach req.user from signed cookie if present */
 app.use(attachUserFromSession);
 
 /* Routes */
-
 
 app.use('/api', uploadsRoutes);
 app.use('/api', healthRoutes);
