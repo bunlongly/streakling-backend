@@ -1,11 +1,10 @@
-// prisma/schema.prisma
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
-  provider = "mysql"              
-  url      = env("DATABASE_URL")   
+  provider = "mysql"
+  url      = env("DATABASE_URL")
 }
 
 enum CardStatus {
@@ -45,62 +44,55 @@ model User {
   createdAt     DateTime          @default(now())
   updatedAt     DateTime          @updatedAt
   digitalCards  DigitalNameCard[]
-  portfolios    Portfolio[] 
+  portfolios    Portfolio[]
 }
 
 model DigitalNameCard {
-  id            String         @id @default(cuid())
-  userId        String
-  slug          String         // vanity slug (globally unique)
-  firstName     String
-  lastName      String
-  appName       String
-  status        CardStatus
-  role          String
-  shortBio      String
-  company       String?
-  university    String?
-  country       String?
-  religion      String?        // sensitive
-  phone         String?        // sensitive
+  id             String         @id @default(cuid())
+  userId         String
+  slug           String
+  firstName      String
+  lastName       String
+  appName        String
+  status         CardStatus
+  role           String
+  shortBio       String
+  company        String?
+  university     String?
+  country        String?
+  religion       String?
+  phone          String?
 
-  // per-field visibility
-  showPhone     Boolean        @default(false)
-  showReligion  Boolean        @default(false)
-  showCompany   Boolean        @default(true)
-  showUniversity Boolean       @default(true)
-  showCountry   Boolean        @default(true)
+  showPhone      Boolean        @default(false)
+  showReligion   Boolean        @default(false)
+  showCompany    Boolean        @default(true)
+  showUniversity Boolean        @default(true)
+  showCountry    Boolean        @default(true)
 
-  avatarKey     String?
-  bannerKey     String?
-  publishStatus PublishStatus  @default(DRAFT)
-  publishedAt   DateTime?
-  createdAt     DateTime       @default(now())
-  updatedAt     DateTime       @updatedAt
+  avatarKey      String?
+  bannerKey      String?
+  publishStatus  PublishStatus  @default(DRAFT)
+  publishedAt    DateTime?
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
 
-  user          User           @relation(fields: [userId], references: [id])
+  user           User           @relation(fields: [userId], references: [id])
 
   socials        SocialAccount[]
-
+  portfoliosImported Portfolio[] @relation("PortfolioSourceCard")
   @@unique([userId, slug])
-
-  // add global vanity slug unique
   @@unique([slug])
-
   @@index([publishStatus, publishedAt])
   @@index([appName])
-
 }
-
-
 
 model SocialAccount {
   id        String          @id @default(cuid())
   cardId    String
   platform  SocialPlatform
-  handle    String?         // e.g. @bunlong
-  url       String?         // full URL
-  label     String?         // custom label for OTHER/ PERSONAL etc.
+  handle    String?
+  url       String?
+  label     String?
   isPublic  Boolean         @default(true)
   sortOrder Int             @default(0)
 
@@ -115,31 +107,40 @@ model SocialAccount {
 
 
 model Portfolio {
-  id            String           @id @default(cuid())
-  userId        String
+  id             String           @id @default(cuid())
+  userId         String
 
-  slug          String
+  slug           String
 
-  title         String
-  description   String?
-  mainImageKey  String?
-  tags          Json?
+  title          String
+  description    String?
+  mainImageKey   String?
+  tags           Json?
 
 
-  publishStatus PublishStatus  @default(DRAFT)
-  publishedAt   DateTime?
+  about          Json?
 
-  createdAt     DateTime         @default(now())
-  updatedAt     DateTime         @updatedAt
+  publishStatus  PublishStatus  @default(DRAFT)
+  publishedAt    DateTime?
 
-  user          User             @relation(fields: [userId], references: [id])
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
 
-  subImages     PortfolioImage[]
-  videoLinks    PortfolioVideo[]
-  projects      PortfolioProject[]
+  sourceCardId        String?
+  sourceCardSnapshot  Json?
+  sourceCard          DigitalNameCard? @relation("PortfolioSourceCard", fields: [sourceCardId], references: [id], onDelete: SetNull)
 
-  @@unique([userId, slug])     
-  @@unique([slug])             
+
+  user           User           @relation(fields: [userId], references: [id])
+
+  subImages      PortfolioImage[]
+  videoLinks     PortfolioVideo[]
+  projects       PortfolioProject[]
+  experiences    PortfolioExperience[]
+  educations     PortfolioEducation[]
+
+  @@unique([userId, slug])
+  @@unique([slug])
   @@index([userId, createdAt])
   @@index([publishStatus, publishedAt])
 }
@@ -151,7 +152,7 @@ model PortfolioImage {
   url          String
   sortOrder    Int        @default(0)
 
-  portfolio    Portfolio  @relation(fields: [portfolioId], references: [id])
+  portfolio    Portfolio  @relation(fields: [portfolioId], references: [id], onDelete: Cascade)
 
   @@index([portfolioId, sortOrder])
 }
@@ -161,14 +162,12 @@ model PortfolioVideo {
   portfolioId  String
   platform     SocialPlatform
   url          String
-  description  String?         // keep short text only
+  description  String?
 
-  portfolio    Portfolio       @relation(fields: [portfolioId], references: [id])
+  portfolio    Portfolio       @relation(fields: [portfolioId], references: [id], onDelete: Cascade)
 
   @@index([portfolioId, platform])
 }
-
-// ---------------- NEW MODELS ----------------
 
 model PortfolioProject {
   id             String                 @id @default(cuid())
@@ -180,7 +179,7 @@ model PortfolioProject {
   createdAt      DateTime               @default(now())
   updatedAt      DateTime               @updatedAt
 
-  portfolio   Portfolio @relation(fields: [portfolioId], references: [id], onDelete: Cascade)
+  portfolio      Portfolio              @relation(fields: [portfolioId], references: [id], onDelete: Cascade)
   subImages      PortfolioProjectImage[]
   videoLinks     PortfolioProjectVideo[]
 
@@ -193,8 +192,8 @@ model PortfolioProjectImage {
   key         String
   url         String
   sortOrder   Int                 @default(0)
-  
-  project   PortfolioProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  project     PortfolioProject    @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
   @@index([projectId, sortOrder])
 }
@@ -206,7 +205,40 @@ model PortfolioProjectVideo {
   url         String
   description String?
 
-  project   PortfolioProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  project     PortfolioProject    @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
   @@index([projectId, platform])
+}
+
+
+
+model PortfolioExperience {
+  id           String     @id @default(cuid())
+  portfolioId  String
+  company      String
+  role         String
+  location     String?
+  startDate    DateTime?
+  endDate      DateTime?
+  current      Boolean    @default(false)
+  summary      String?
+
+  portfolio    Portfolio  @relation(fields: [portfolioId], references: [id], onDelete: Cascade)
+
+  @@index([portfolioId, startDate])
+}
+
+model PortfolioEducation {
+  id           String     @id @default(cuid())
+  portfolioId  String
+  school       String
+  degree       String?
+  field        String?
+  startDate    DateTime?
+  endDate      DateTime?
+  summary      String?
+
+  portfolio    Portfolio  @relation(fields: [portfolioId], references: [id], onDelete: Cascade)
+
+  @@index([portfolioId, startDate])
 }

@@ -11,17 +11,20 @@ import {
   listPortfoliosMine,
   getMyPortfolioById,
   updatePortfolio,
-  //   deletePortfolio,
-  getPublicPortfolioBySlug
+  deletePortfolio,
+  getPublicPortfolioBySlug,
+  prefillPortfolioFromCard
 } from '../controllers/portfolioController';
 
 const router = Router();
 
 /** ---- PUBLIC ---- */
-router.get('/portfolios/slug/:slug', getPublicPortfolioBySlug); // ← no session
+router.get('/portfolios/slug/:slug', getPublicPortfolioBySlug);
 
 /** ---- AUTHENTICATED ---- */
 router.use(requireSession);
+
+router.get('/portfolios/prefill-from-card/:cardId', prefillPortfolioFromCard);
 
 router.post(
   '/portfolios',
@@ -35,6 +38,6 @@ router.patch(
   validateBody(updatePortfolioSchema),
   updatePortfolio
 );
-// router.delete('/portfolios/:id', deletePortfolio);
+router.delete('/portfolios/:id', deletePortfolio);
 
 export default router;

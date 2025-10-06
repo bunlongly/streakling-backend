@@ -33,9 +33,13 @@ function serializePortfolio(p: unknown) {
 }
 
 const fullInclude = {
-  subImages: true,
+  subImages: { orderBy: { sortOrder: 'asc' } },
   videoLinks: true,
-  projects: { include: { subImages: true, videoLinks: true } }
+  projects: {
+    include: { subImages: { orderBy: { sortOrder: 'asc' } }, videoLinks: true }
+  },
+  experiences: { orderBy: { startDate: 'desc' } },
+  educations: { orderBy: { startDate: 'desc' } }
 } as const;
 
 function slugify(input: string) {
@@ -58,12 +62,96 @@ async function ensureUniqueSlug(base: string): Promise<string> {
   }
 }
 
+function toDateOrNull(v?: unknown): Date | null | undefined {
+  if (v == null || v === '') return undefined;
+  if (v instanceof Date) return isNaN(+v) ? undefined : v;
+  if (typeof v === 'string') {
+    const s = v.trim();
+    if (!s) return undefined;
+    const iso = /T\d{2}:\d{2}/.test(s) ? s : `${s}T00:00:00.000Z`;
+    const d = new Date(iso);
+    return isNaN(+d) ? undefined : d;
+  }
+  return undefined;
+}
+
+// nested builders
+const createSubImages = (
+  arr?: Array<{ key: string; url: string; sortOrder?: number }>
+) =>
+  arr && arr.length
+    ? {
+        create: arr.map(i => ({
+          key: i.key,
+          url: i.url,
+          sortOrder: i.sortOrder ?? 0
+        }))
+      }
+    : undefined;
+
+const createVideoLinks = (
+  arr?: Array<{ platform: string; url: string; description?: string }>
+) =>
+  arr && arr.length
+    ? {
+        create: arr.map(v => ({
+          platform: v.platform as any,
+          url: v.url,
+          description: v.description ?? undefined
+        }))
+      }
+    : undefined;
+
+const createProjects = (arr?: any[]) =>
+  arr && arr.length
+    ? {
+        create: arr.map(pr => ({
+          title: pr.title,
+          description: pr.description ?? undefined,
+          mainImageKey: pr.mainImageKey ?? undefined,
+          tags: pr.tags ?? [],
+          subImages: createSubImages(pr.subImages),
+          videoLinks: createVideoLinks(pr.videoLinks)
+        }))
+      }
+    : undefined;
+
+const createExperiences = (arr?: any[]) =>
+  arr && arr.length
+    ? {
+        create: arr.map(e => ({
+          company: e.company,
+          role: e.role,
+          location: e.location ?? undefined,
+          startDate: toDateOrNull(e.startDate),
+          endDate: toDateOrNull(e.endDate),
+          current: !!e.current,
+          summary: e.summary ?? undefined
+        }))
+      }
+    : undefined;
+
+const createEducations = (arr?: any[]) =>
+  arr && arr.length
+    ? {
+        create: arr.map(ed => ({
+          school: ed.school,
+          degree: ed.degree ?? undefined,
+          field: ed.field ?? undefined,
+          startDate: toDateOrNull(ed.startDate),
+          endDate: toDateOrNull(ed.endDate),
+          summary: ed.summary ?? undefined
+        }))
+      }
+    : undefined;
+
+/* ==================== CONTROLLERS ==================== */
+
 // POST /portfolios
 export async function createPortfolio(req: Request, res: Response) {
   try {
-    const userId = req.user?.uid;
+    const userId = (req as any).user?.uid;
     if (!userId) return sendUnauthorized(res);
-
     if ((req as any).files?.length) {
       return sendConflict(
         res,
@@ -73,12 +161,62 @@ export async function createPortfolio(req: Request, res: Response) {
 
     const data = createPortfolioSchema.parse(req.body);
 
-    // slug
     const providedSlug = data.slug?.trim();
     const baseSlug = providedSlug || slugify(data.title || 'portfolio');
     const slug = await ensureUniqueSlug(baseSlug);
 
-    // publish
+    // Prefill About from Card (optional) + provenance
+    let about = data.about;
+    let sourceCardId: string | undefined;
+    let sourceCardSnapshot: any | undefined;
+
+    if (data.prefillFromCardId) {
+      const card = await prisma.digitalNameCard.findFirst({
+        where: { id: data.prefillFromCardId, userId },
+        select: {
+          id: true,
+          firstName: true,
+          lastName: true,
+          role: true,
+          shortBio: true,
+          company: true,
+          university: true,
+          country: true,
+          avatarKey: true,
+          bannerKey: true
+        }
+      });
+
+      if (card) {
+        // Only overwrite if about wasn't provided; but provenance is always recorded
+        if (!about) {
+          about = {
+            firstName: card.firstName,
+            lastName: card.lastName,
+            role: card.role,
+            shortBio: card.shortBio ?? undefined,
+            company: card.company ?? undefined,
+            university: card.university ?? undefined,
+            country: card.country ?? undefined,
+            avatarKey: card.avatarKey ?? undefined, // 👈 avatar in
+            bannerKey: card.bannerKey ?? undefined // 👈 banner in
+          };
+        }
+        sourceCardId = card.id;
+        sourceCardSnapshot = {
+          firstName: card.firstName,
+          lastName: card.lastName,
+          role: card.role,
+          shortBio: card.shortBio ?? undefined,
+          company: card.company ?? undefined,
+          university: card.university ?? undefined,
+          country: card.country ?? undefined,
+          avatarKey: card.avatarKey ?? undefined,
+          bannerKey: card.bannerKey ?? undefined
+        };
+      }
+    }
+
     const isPublishing = data.publishStatus === 'PUBLISHED';
 
     const created = await prisma.portfolio.create({
@@ -89,57 +227,21 @@ export async function createPortfolio(req: Request, res: Response) {
         description: data.description,
         mainImageKey: data.mainImageKey,
         tags: data.tags ?? [],
+
+        about: about ?? undefined,
+
+        // 👇 persist provenance even if user didn’t edit anything
+        sourceCardId,
+        sourceCardSnapshot,
+
         publishStatus: data.publishStatus ?? 'DRAFT',
         publishedAt: isPublishing ? new Date() : undefined,
 
-        subImages: data.subImages
-          ? {
-              create: data.subImages.map(i => ({
-                key: i.key,
-                url: i.url,
-                sortOrder: i.sortOrder ?? 0
-              }))
-            }
-          : undefined,
-
-        videoLinks: data.videoLinks
-          ? {
-              create: data.videoLinks.map(v => ({
-                platform: v.platform as any,
-                url: v.url,
-                description: v.description ?? undefined
-              }))
-            }
-          : undefined,
-
-        projects: data.projects
-          ? {
-              create: data.projects.map(pr => ({
-                title: pr.title,
-                description: pr.description ?? undefined,
-                mainImageKey: pr.mainImageKey ?? undefined,
-                tags: pr.tags ?? [],
-                subImages: pr.subImages
-                  ? {
-                      create: pr.subImages.map(i => ({
-                        key: i.key,
-                        url: i.url,
-                        sortOrder: i.sortOrder ?? 0
-                      }))
-                    }
-                  : undefined,
-                videoLinks: pr.videoLinks
-                  ? {
-                      create: pr.videoLinks.map(v => ({
-                        platform: v.platform as any,
-                        url: v.url,
-                        description: v.description ?? undefined
-                      }))
-                    }
-                  : undefined
-              }))
-            }
-          : undefined
+        subImages: createSubImages(data.subImages),
+        videoLinks: createVideoLinks(data.videoLinks),
+        projects: createProjects(data.projects),
+        experiences: createExperiences(data.experiences),
+        educations: createEducations(data.educations)
       },
       include: fullInclude
     });
@@ -153,7 +255,7 @@ export async function createPortfolio(req: Request, res: Response) {
 // GET /portfolios (mine)
 export async function listPortfoliosMine(req: Request, res: Response) {
   try {
-    const userId = req.user?.uid;
+    const userId = (req as any).user?.uid;
     if (!userId) return sendUnauthorized(res);
 
     const portfolios = await prisma.portfolio.findMany({
@@ -171,7 +273,7 @@ export async function listPortfoliosMine(req: Request, res: Response) {
 // GET /portfolios/:id (mine)
 export async function getMyPortfolioById(req: Request, res: Response) {
   try {
-    const userId = req.user?.uid;
+    const userId = (req as any).user?.uid;
     if (!userId) return sendUnauthorized(res);
 
     const { id } = req.params;
@@ -190,7 +292,7 @@ export async function getMyPortfolioById(req: Request, res: Response) {
 // PATCH /portfolios/:id
 export async function updatePortfolio(req: Request, res: Response) {
   try {
-    const userId = req.user?.uid;
+    const userId = (req as any).user?.uid;
     if (!userId) return sendUnauthorized(res);
 
     const { id } = req.params;
@@ -210,19 +312,17 @@ export async function updatePortfolio(req: Request, res: Response) {
     });
     if (!existing) return sendNotFound(res, 'Portfolio not found');
 
-    // if slug changed, ensure unique
     let slugUpdate: string | undefined;
     if (body.slug && body.slug !== existing.slug) {
       slugUpdate = await ensureUniqueSlug(body.slug);
     }
 
-    // publish timestamp transitions
     let publishedAtUpdate: Date | null | undefined = undefined;
     if (body.publishStatus) {
       if (body.publishStatus === 'PUBLISHED' && !existing.publishedAt) {
         publishedAtUpdate = new Date();
       } else if (body.publishStatus !== 'PUBLISHED') {
-        publishedAtUpdate = null; // clear if moving back to draft/private
+        publishedAtUpdate = null;
       }
     }
 
@@ -236,61 +336,37 @@ export async function updatePortfolio(req: Request, res: Response) {
         tags: body.tags ?? undefined,
         publishStatus: body.publishStatus ?? undefined,
         publishedAt: publishedAtUpdate,
+        about: body.about ?? undefined,
 
         ...(body.subImages
           ? {
-              subImages: {
-                deleteMany: {},
-                create: body.subImages.map(i => ({
-                  key: i.key,
-                  url: i.url,
-                  sortOrder: i.sortOrder ?? 0
-                }))
-              }
+              subImages: { deleteMany: {}, ...createSubImages(body.subImages) }
             }
           : {}),
-
         ...(body.videoLinks
           ? {
               videoLinks: {
                 deleteMany: {},
-                create: body.videoLinks.map(v => ({
-                  platform: v.platform as any,
-                  url: v.url,
-                  description: v.description ?? undefined
-                }))
+                ...createVideoLinks(body.videoLinks)
               }
             }
           : {}),
-
         ...(body.projects
+          ? { projects: { deleteMany: {}, ...createProjects(body.projects) } }
+          : {}),
+        ...(body.experiences
           ? {
-              projects: {
+              experiences: {
                 deleteMany: {},
-                create: body.projects.map(pr => ({
-                  title: pr.title,
-                  description: pr.description ?? undefined,
-                  mainImageKey: pr.mainImageKey ?? undefined,
-                  tags: pr.tags ?? [],
-                  subImages: pr.subImages
-                    ? {
-                        create: pr.subImages.map(i => ({
-                          key: i.key,
-                          url: i.url,
-                          sortOrder: i.sortOrder ?? 0
-                        }))
-                      }
-                    : undefined,
-                  videoLinks: pr.videoLinks
-                    ? {
-                        create: pr.videoLinks.map(v => ({
-                          platform: v.platform as any,
-                          url: v.url,
-                          description: v.description ?? undefined
-                        }))
-                      }
-                    : undefined
-                }))
+                ...createExperiences(body.experiences)
+              }
+            }
+          : {}),
+        ...(body.educations
+          ? {
+              educations: {
+                deleteMany: {},
+                ...createEducations(body.educations)
               }
             }
           : {})
@@ -304,21 +380,87 @@ export async function updatePortfolio(req: Request, res: Response) {
   }
 }
 
-// ---- PUBLIC: GET /portfolios/slug/:slug ----
+// DELETE /portfolios/:id
+export async function deletePortfolio(req: Request, res: Response) {
+  try {
+    const userId = (req as any).user?.uid;
+    if (!userId) return sendUnauthorized(res);
+
+    const { id } = req.params;
+    const existing = await prisma.portfolio.findFirst({
+      where: { id, userId },
+      select: { id: true }
+    });
+    if (!existing) return sendNotFound(res, 'Portfolio not found');
+
+    await prisma.portfolio.delete({ where: { id } }); // cascades
+    return sendSuccess(res, { deleted: true });
+  } catch (err) {
+    return sendError(res, err);
+  }
+}
+
+// PUBLIC: GET /portfolios/slug/:slug
 export async function getPublicPortfolioBySlug(req: Request, res: Response) {
   try {
     const { slug } = req.params;
 
     const p = await prisma.portfolio.findFirst({
-      where: {
-        slug,
-        publishStatus: 'PUBLISHED'
-      },
+      where: { slug, publishStatus: 'PUBLISHED' },
       include: fullInclude
     });
 
     if (!p) return sendNotFound(res, 'Portfolio not found');
     return sendSuccess(res, serializePortfolio(p));
+  } catch (err) {
+    return sendError(res, err);
+  }
+}
+
+// GET /portfolios/prefill-from-card/:cardId  (auth)
+export async function prefillPortfolioFromCard(req: Request, res: Response) {
+  try {
+    const userId = (req as any).user?.uid;
+    if (!userId) return sendUnauthorized(res);
+
+    const { cardId } = req.params;
+    const card = await prisma.digitalNameCard.findFirst({
+      where: { id: cardId, userId },
+      select: {
+        id: true,
+        firstName: true,
+        lastName: true,
+        role: true,
+        shortBio: true,
+        company: true,
+        university: true,
+        country: true,
+        avatarKey: true,
+        bannerKey: true
+      }
+    });
+
+    if (!card) return sendNotFound(res, 'Card not found');
+
+    const payload = {
+      title: `${card.firstName} ${card.lastName} — Portfolio`.trim(),
+      description: card.shortBio ?? undefined,
+      about: {
+        firstName: card.firstName,
+        lastName: card.lastName,
+        role: card.role,
+        shortBio: card.shortBio ?? undefined,
+        company: card.company ?? undefined,
+        university: card.university ?? undefined,
+        country: card.country ?? undefined,
+        avatarKey: card.avatarKey ?? undefined,
+        bannerKey: card.bannerKey ?? undefined
+      },
+      // 👇 return cardId so the client can post it back on create
+      prefillFromCardId: card.id
+    };
+
+    return sendSuccess(res, payload);
   } catch (err) {
     return sendError(res, err);
   }
