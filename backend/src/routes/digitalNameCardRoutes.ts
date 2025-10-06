@@ -23,7 +23,7 @@ router.post(
   requireSession,
   validateBody(createDigitalCardSchema),
   createCard
-);
+); 
 router.get('/me/digital-name-cards', requireSession, listMyCards);
 
 // handy for edit page prefill

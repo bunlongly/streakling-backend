@@ -465,3 +465,33 @@ export async function prefillPortfolioFromCard(req: Request, res: Response) {
     return sendError(res, err);
   }
 }
+
+// PUBLIC: GET /portfolios/public — list all published portfolios (paginated)
+export async function listPublicPortfolios(req: Request, res: Response) {
+  try {
+    const limit = Math.min(
+      Math.max(parseInt(String(req.query.limit ?? '24'), 10) || 24, 1),
+      60
+    );
+    const cursor = (req.query.cursor as string | undefined) || undefined;
+
+    const rows = await prisma.portfolio.findMany({
+      where: { publishStatus: 'PUBLISHED' },
+      orderBy: { id: 'desc' }, // 👈 stable and unique
+      take: limit + 1,
+      ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
+      include: fullInclude
+    });
+
+    const hasMore = rows.length > limit;
+    const items = hasMore ? rows.slice(0, -1) : rows;
+    const nextCursor = hasMore ? items[items.length - 1]!.id : null;
+
+    return sendSuccess(res, {
+      items: items.map(serializePortfolio),
+      nextCursor
+    });
+  } catch (err) {
+    return sendError(res, err);
+  }
+}
