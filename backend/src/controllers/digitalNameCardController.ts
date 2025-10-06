@@ -291,3 +291,54 @@ export async function getPublicCardBySlug(req: Request, res: Response) {
     return sendError(res, e?.message ?? 'Failed to fetch card');
   }
 }
+
+/** GET /api/digital-name-cards — list all published cards */
+export async function listPublishedCards(req: Request, res: Response) {
+  try {
+    const { q, take, cursor } = req.query as {
+      q?: string;
+      take?: string;
+      cursor?: string;
+    };
+
+    const pageSize = Math.min(Math.max(parseInt(String(take || 24), 10) || 24, 1), 100);
+
+    const where = {
+      publishStatus: 'PUBLISHED' as const,
+      ...(q
+        ? {
+            OR: [
+              { firstName: { contains: q, mode: 'insensitive' } },
+              { lastName: { contains: q, mode: 'insensitive' } },
+              { role: { contains: q, mode: 'insensitive' } },
+              { appName: { contains: q, mode: 'insensitive' } }
+            ]
+          }
+        : {})
+    };
+
+    const cards = await prisma.digitalNameCard.findMany({
+      where,
+      take: pageSize + 1,
+      ...(cursor ? { skip: 1, cursor: { id: cursor } } : {}),
+      orderBy: [{ updatedAt: 'desc' }, { id: 'asc' }],
+      include: { socials: true }
+    });
+
+    const hasMore = cards.length > pageSize;
+    const items = hasMore ? cards.slice(0, pageSize) : cards;
+    const nextCursor = hasMore ? items[items.length - 1]?.id : null;
+
+    const uid = req.user?.uid ?? null;
+    const payload = items.map(c => {
+      const isOwner = uid === c.userId;
+      const base = serializeCard(c, { isOwner });
+      (base as any).canEdit = isOwner; // FE hint
+      return base;
+    });
+
+    return sendSuccess(res, { items: payload, nextCursor }, 'Published cards');
+  } catch (e: any) {
+    return sendError(res, e?.message ?? 'Failed to list cards');
+  }
+}

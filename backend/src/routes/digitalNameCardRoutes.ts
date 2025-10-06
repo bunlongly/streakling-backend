@@ -12,7 +12,7 @@ import {
   updateCard,
   getMyCardById,
   deleteCard,
-  
+  listPublishedCards
 } from '../controllers/digitalNameCardController';
 
 const router = Router();
@@ -39,6 +39,8 @@ router.patch(
 /** Public */
 // Public by vanity slug
 router.get('/digital-name-card/slug/:slug', getPublicCardBySlug);
+
+router.get('/digital-name-cards', listPublishedCards);
 
 router.delete('/digital-name-cards/:id', requireSession, deleteCard);
 
