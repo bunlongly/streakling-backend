@@ -37,15 +37,52 @@ model User {
   username      String?           @unique
   email         String?           @unique
   displayName   String
+  // Avatar upload uses the same signer flow as your other features
+  avatarKey     String?
   avatarUrl     String?
+  bannerKey     String?
+
   country       String?
   religion      String?
+  dateOfBirth   DateTime?
   phone         String?
+
+  // field-level privacy toggles (false = private by default)
+  showEmail         Boolean       @default(false)
+  showReligion      Boolean       @default(false)
+  showDateOfBirth   Boolean       @default(false)
+  showPhone         Boolean       @default(false)
+  showCountry       Boolean       @default(true)
+
+  // industries/categories (many-to-many)
+  industries     UserIndustry[]
+
   createdAt     DateTime          @default(now())
   updatedAt     DateTime          @updatedAt
   digitalCards  DigitalNameCard[]
   portfolios    Portfolio[]
 }
+
+model Industry {
+  id        String          @id @default(cuid())
+  slug      String          @unique
+  name      String
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+
+  users     UserIndustry[]
+}
+
+model UserIndustry {
+  userId     String
+  industryId String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  industry   Industry @relation(fields: [industryId], references: [id], onDelete: Cascade)
+
+  @@id([userId, industryId])
+  @@index([industryId])
+}
+
 
 model DigitalNameCard {
   id             String         @id @default(cuid())

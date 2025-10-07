@@ -17,19 +17,15 @@ const clerk = createClerkClient({ secretKey: env.CLERK_SECRET_KEY });
 
 /**
  * POST /api/session/login
- * Body: { token: "<Clerk session/JWT>", sensitive?: { phone?, religion?, country? } }
+ * Body: { token: "<Clerk JWT>", sensitive?: { phone?, religion?, country? } }
  */
 router.post('/session/login', async (req, res) => {
   const token = req.body?.token as string | undefined;
   if (!token) return sendBadRequest(res, 'Missing token');
 
   try {
-    // ✅ Correct usage: token as 1st arg, options as 2nd
     const verified = await verifyToken(token, {
       secretKey: env.CLERK_SECRET_KEY
-      // Optional hardening:
-      // authorizedParties: ['http://localhost:3000'],
-      // clockSkewInMs: 5000
     });
 
     const clerkUserId = verified.sub;
@@ -51,22 +47,22 @@ router.post('/session/login', async (req, res) => {
         : cu.fullName || 'User';
     const avatarUrl = cu.imageUrl ?? null;
 
+    // IMPORTANT: don't default to null — use undefined when missing so we don't overwrite.
     const sensitive = (req.body?.sensitive ?? {}) as {
       phone?: string | null;
       religion?: string | null;
       country?: string | null;
     };
 
-    // Upsert into Prisma
     const user = await upsertUserFromClerk({
       clerkId: clerkUserId,
-      username,
-      email: primaryEmail,
+      username: username ?? undefined,
+      email: primaryEmail ?? undefined,
       displayName,
-      avatarUrl,
-      country: sensitive.country ?? null,
-      phone: sensitive.phone ?? null,
-      religion: sensitive.religion ?? null
+      avatarUrl: avatarUrl ?? undefined,
+      country: sensitive.country ?? undefined,
+      phone: sensitive.phone ?? undefined,
+      religion: sensitive.religion ?? undefined
     });
 
     // Set signed, httpOnly cookie

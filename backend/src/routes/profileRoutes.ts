@@ -1,13 +1,30 @@
+// src/routes/profileRoutes.ts
 import { Router } from 'express';
-import { sendSuccess, sendUnauthorized } from '../utils/reponseHandller'; // <-- fixed
-import { requireSession } from '../middlewares/session.js';
+import { requireSession } from '../middlewares/session';
+import { validateBody } from '../middlewares/validate';
+import {
+  getProfile,
+  updateProfile,
+  getPublicProfileByUsername,
+  getPublicProfileById,
+  listPublicProfiles
+} from '../controllers/profileController';
+import { updateMyProfileSchema } from '../schemas/profile';
 
 const router = Router();
 
-/** GET /api/profile — returns user from cookie session only */
-router.get('/profile', requireSession, (req, res) => {
-  if (!req.user) return sendUnauthorized(res);
-  return sendSuccess(res, { user: req.user }, 'Profile from session');
-});
+/** Public: by username or id */
+router.get('/u/:username', getPublicProfileByUsername);
+router.get('/u/id/:id', getPublicProfileById);
+router.get('/profiles/public', listPublicProfiles);
+
+/** Authenticated: self */
+router.get('/profile', requireSession, getProfile);
+router.patch(
+  '/profile',
+  requireSession,
+  validateBody(updateMyProfileSchema),
+  updateProfile
+);
 
 export default router;
