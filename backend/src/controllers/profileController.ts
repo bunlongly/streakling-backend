@@ -10,6 +10,17 @@ import {
 } from '../utils/reponseHandller';
 import { updateMyProfileSchema } from '../schemas/profile';
 
+// Convert unknown errors into a safe message for sendError()
+function errMsg(e: unknown): string {
+  if (e instanceof Error) return e.message;
+  if (typeof e === 'string') return e;
+  try {
+    return JSON.stringify(e);
+  } catch {
+    return 'Unexpected error';
+  }
+}
+
 function serializeProfile(u: any, opts: { isOwner: boolean }) {
   if (!u) return null;
 
@@ -78,8 +89,8 @@ export async function getProfile(req: Request, res: Response) {
       serializeProfile(u, { isOwner: true }),
       'My profile'
     );
-  } catch (e) {
-    return sendError(res, e);
+  } catch (e: unknown) {
+    return sendError(res, errMsg(e));
   }
 }
 
@@ -89,6 +100,7 @@ export async function updateProfile(req: Request, res: Response) {
   try {
     const input = updateMyProfileSchema.parse(req.body);
 
+    // username uniqueness (if changing)
     if (input.username) {
       const existing = await prisma.user.findFirst({
         where: { username: input.username, NOT: { id: req.user.uid } },
@@ -97,6 +109,7 @@ export async function updateProfile(req: Request, res: Response) {
       if (existing) return sendConflict(res, 'Username is already taken');
     }
 
+    // industries upsert
     let industriesData:
       | {
           deleteMany: Record<string, never>;
@@ -126,6 +139,7 @@ export async function updateProfile(req: Request, res: Response) {
       };
     }
 
+    // Build data map; undefined => don't touch, null => clear
     const data: any = {
       username: input.username ?? undefined,
       displayName: input.displayName ?? undefined,
@@ -146,6 +160,7 @@ export async function updateProfile(req: Request, res: Response) {
       ...(industriesData ? { industries: industriesData } : {})
     };
 
+    // allow clearing image columns by sending null
     if ('avatarKey' in input) data.avatarKey = input.avatarKey;
     if ('bannerKey' in input) data.bannerKey = input.bannerKey;
 
@@ -160,8 +175,8 @@ export async function updateProfile(req: Request, res: Response) {
       serializeProfile(updated, { isOwner: true }),
       'Profile updated'
     );
-  } catch (e) {
-    return sendError(res, e);
+  } catch (e: unknown) {
+    return sendError(res, errMsg(e));
   }
 }
 
@@ -176,8 +191,8 @@ export async function getPublicProfileByUsername(req: Request, res: Response) {
     if (!u) return sendNotFound(res, 'User not found');
     const isOwner = req.user?.uid === u.id;
     return sendSuccess(res, serializeProfile(u, { isOwner }), 'Profile');
-  } catch (e) {
-    return sendError(res, e);
+  } catch (e: unknown) {
+    return sendError(res, errMsg(e));
   }
 }
 
@@ -192,8 +207,8 @@ export async function getPublicProfileById(req: Request, res: Response) {
     if (!u) return sendNotFound(res, 'User not found');
     const isOwner = req.user?.uid === u.id;
     return sendSuccess(res, serializeProfile(u, { isOwner }), 'Profile');
-  } catch (e) {
-    return sendError(res, e);
+  } catch (e: unknown) {
+    return sendError(res, errMsg(e));
   }
 }
 
@@ -231,7 +246,7 @@ export async function listPublicProfiles(req: Request, res: Response) {
     const payload = items.map(u => serializeProfile(u, { isOwner: false }));
 
     return sendSuccess(res, { items: payload, nextCursor }, 'Public profiles');
-  } catch (e) {
-    return sendError(res, e);
+  } catch (e: unknown) {
+    return sendError(res, errMsg(e));
   }
 }

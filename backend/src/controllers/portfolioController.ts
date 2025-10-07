@@ -13,6 +13,17 @@ import {
   updatePortfolioSchema
 } from '../schemas/portfolio';
 
+// --- helper to stringify unknown errors safely ---
+function errMsg(e: unknown): string {
+  if (e instanceof Error) return e.message;
+  if (typeof e === 'string') return e;
+  try {
+    return JSON.stringify(e);
+  } catch {
+    return 'Unexpected error';
+  }
+}
+
 type WithSortOrder = { sortOrder?: number };
 function sortByOrder<T extends WithSortOrder>(a: T, b: T) {
   return (a.sortOrder ?? 0) - (b.sortOrder ?? 0);
@@ -247,8 +258,8 @@ export async function createPortfolio(req: Request, res: Response) {
     });
 
     return sendSuccess(res, serializePortfolio(created));
-  } catch (err) {
-    return sendError(res, err);
+  } catch (err: unknown) {
+    return sendError(res, errMsg(err));
   }
 }
 
@@ -265,8 +276,8 @@ export async function listPortfoliosMine(req: Request, res: Response) {
     });
 
     return sendSuccess(res, portfolios.map(serializePortfolio));
-  } catch (err) {
-    return sendError(res, err);
+  } catch (err: unknown) {
+    return sendError(res, errMsg(err));
   }
 }
 
@@ -284,8 +295,8 @@ export async function getMyPortfolioById(req: Request, res: Response) {
 
     if (!p) return sendNotFound(res, 'Portfolio not found');
     return sendSuccess(res, serializePortfolio(p));
-  } catch (err) {
-    return sendError(res, err);
+  } catch (err: unknown) {
+    return sendError(res, errMsg(err));
   }
 }
 
@@ -375,8 +386,8 @@ export async function updatePortfolio(req: Request, res: Response) {
     });
 
     return sendSuccess(res, serializePortfolio(updated));
-  } catch (err) {
-    return sendError(res, err);
+  } catch (err: unknown) {
+    return sendError(res, errMsg(err));
   }
 }
 
@@ -395,8 +406,8 @@ export async function deletePortfolio(req: Request, res: Response) {
 
     await prisma.portfolio.delete({ where: { id } }); // cascades
     return sendSuccess(res, { deleted: true });
-  } catch (err) {
-    return sendError(res, err);
+  } catch (err: unknown) {
+    return sendError(res, errMsg(err));
   }
 }
 
@@ -412,8 +423,8 @@ export async function getPublicPortfolioBySlug(req: Request, res: Response) {
 
     if (!p) return sendNotFound(res, 'Portfolio not found');
     return sendSuccess(res, serializePortfolio(p));
-  } catch (err) {
-    return sendError(res, err);
+  } catch (err: unknown) {
+    return sendError(res, errMsg(err));
   }
 }
 
@@ -461,8 +472,8 @@ export async function prefillPortfolioFromCard(req: Request, res: Response) {
     };
 
     return sendSuccess(res, payload);
-  } catch (err) {
-    return sendError(res, err);
+  } catch (err: unknown) {
+    return sendError(res, errMsg(err));
   }
 }
 
@@ -491,7 +502,7 @@ export async function listPublicPortfolios(req: Request, res: Response) {
       items: items.map(serializePortfolio),
       nextCursor
     });
-  } catch (err) {
-    return sendError(res, err);
+  } catch (err: unknown) {
+    return sendError(res, errMsg(err));
   }
 }
