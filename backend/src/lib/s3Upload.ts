@@ -4,7 +4,7 @@ export async function uploadFirst({
   folder
 }: {
   file: File;
-  folder: "profiles" | "digital-cards" | "portfolios";
+  folder: "profiles" | "digital-cards" | "portfolios" | "challenges";
 }) {
   // step 1: ask backend for upload url + final public fileUrl
   const presign = await fetch("/api/uploads/presign", {

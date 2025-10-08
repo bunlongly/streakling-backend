@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 export const signUploadSchema = z.object({
-  category: z.enum(['digitalcard', 'portfolio', 'profile']),
+  category: z.enum(['digitalcard', 'portfolio', 'profile', 'challenge']),
   purpose: z.enum(['avatar', 'banner', 'cover', 'media']),
   contentType: z.string().min(1),
   sizeBytes: z

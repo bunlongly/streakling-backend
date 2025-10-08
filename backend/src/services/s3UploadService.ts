@@ -4,7 +4,7 @@ import { randomUUID } from 'crypto';
 import { s3, s3ObjectUrl } from '../config/s3';
 import { env } from '../config/env';
 
-export type UploadCategory = 'digitalcard' | 'portfolio' | 'profile';
+export type UploadCategory = 'digitalcard' | 'portfolio' | 'profile' | 'challenge';
 export type UploadPurpose = 'avatar' | 'banner' | 'cover' | 'media'; // extend as needed
 
 const ALLOWED_IMAGE_TYPES = new Set([

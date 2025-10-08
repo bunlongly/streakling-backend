@@ -31,6 +31,12 @@ enum SocialPlatform {
   OTHER
 }
 
+enum ChallengeStatus {
+  OPEN
+  CLOSED
+  ARCHIVED
+}
+
 model User {
   id            String            @id @default(cuid())
   clerkId       String            @unique
@@ -53,6 +59,9 @@ model User {
   showDateOfBirth   Boolean       @default(false)
   showPhone         Boolean       @default(false)
   showCountry       Boolean       @default(true)
+
+  challenges      Challenge[]
+  submissions     ChallengeSubmission[]
 
   // industries/categories (many-to-many)
   industries     UserIndustry[]
@@ -278,4 +287,93 @@ model PortfolioEducation {
   portfolio    Portfolio  @relation(fields: [portfolioId], references: [id], onDelete: Cascade)
 
   @@index([portfolioId, startDate])
+}
+
+
+model Challenge {
+  id                   String              @id @default(cuid())
+  userId               String
+  user                 User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  slug                 String              @unique
+  title                String
+  description          String?
+  brandName            String?
+  brandLogoKey         String?
+  postingUrl           String?
+  targetPlatforms      Json?
+  goalViews            Int?
+  goalLikes            Int?
+  deadline             DateTime?
+
+  publishStatus        PublishStatus       @default(DRAFT)
+  publishedAt          DateTime?
+  status               ChallengeStatus     @default(OPEN)
+
+  // Up to 6 sub-images (enforce in API/controller)
+  images               ChallengeImage[]
+
+  prizes               ChallengePrize[]
+
+  // Monotonic counter for submission ordering
+  nextSubmissionOrder  Int                 @default(1)
+
+  submissions          ChallengeSubmission[]
+
+  createdAt            DateTime            @default(now())
+  updatedAt            DateTime            @updatedAt
+}
+
+model ChallengeImage {
+  id          String     @id @default(cuid())
+  challengeId String
+  challenge   Challenge  @relation(fields: [challengeId], references: [id], onDelete: Cascade)
+
+  key         String
+  url         String
+  sortOrder   Int        @default(0)
+
+  @@index([challengeId, sortOrder])
+}
+
+model ChallengePrize {
+  id          String     @id @default(cuid())
+  challengeId String
+  challenge   Challenge  @relation(fields: [challengeId], references: [id], onDelete: Cascade)
+
+  rank        Int        // 1, 2, 3...
+  label       String?
+  amountCents Int?
+  notes       String?
+
+  @@unique([challengeId, rank])
+}
+
+model ChallengeSubmission {
+  id               String     @id @default(cuid())
+  challengeId      String
+  challenge        Challenge  @relation(fields: [challengeId], references: [id], onDelete: Cascade)
+
+  // REQUIRED to enforce one-per-user-per-challenge at DB level
+  submitterId      String
+  submitter        User       @relation(fields: [submitterId], references: [id])
+
+  platform         String
+  linkUrl          String?
+  imageKey         String?
+  notes            String?
+
+  // Snapshot of contact & socials at submit time
+  submitterName    String?
+  submitterPhone   String?
+  submitterSocials Json?      // [{platform, handle, url, label}]
+
+  submissionOrder  Int
+  status           String     @default("PENDING") // Or convert to enum later
+
+  createdAt        DateTime   @default(now())
+  updatedAt        DateTime   @updatedAt
+
+  @@unique([challengeId, submissionOrder])
+  @@unique([challengeId, submitterId])
 }
