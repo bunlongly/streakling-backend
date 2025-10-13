@@ -10,7 +10,9 @@ import {
 } from '../utils/reponseHandller';
 import { updateMyProfileSchema } from '../schemas/profile';
 
-// Convert unknown errors into a safe message for sendError()
+/* ==================== Helpers ==================== */
+
+// Safe error → message for sendError()
 function errMsg(e: unknown): string {
   if (e instanceof Error) return e.message;
   if (typeof e === 'string') return e;
@@ -21,6 +23,56 @@ function errMsg(e: unknown): string {
   }
 }
 
+/**
+ * Format a JS/Prisma Date to a date-only string "YYYY-MM-DD".
+ * We use toISOString().slice(0,10) after storing the date as a stable UTC noon
+ * (see toDateOrNull) to avoid off-by-one shifts.
+ */
+function toYMD(d?: Date | null): string | null {
+  return d ? new Date(d).toISOString().slice(0, 10) : null;
+}
+
+/**
+ * Parse a date-only "YYYY-MM-DD" into a Date that won't drift across TZs.
+ * We construct at 12:00 UTC to sidestep edge cases where midnight UTC
+ * can render as the prior/next day in some environments.
+ *
+ * - undefined  => do not update
+ * - null       => clear column (set to null)
+ * - ''         => do not update (treated like undefined by caller)
+ * - 'YYYY-MM-DD' => Date(UTC noon) for that calendar day
+ */
+function toDateOrNull(s?: string | null): Date | null | undefined {
+  if (s === undefined) return undefined; // don't touch
+  if (s === null) return null; // explicit clear
+  const trimmed = s.trim();
+  if (!trimmed) return undefined; // empty string => don't touch
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(trimmed);
+  if (!m) return undefined;
+  const [, yy, mm, dd] = m;
+  const y = Number(yy);
+  const mo = Number(mm);
+  const d = Number(dd);
+  if (
+    !Number.isInteger(y) ||
+    !Number.isInteger(mo) ||
+    !Number.isInteger(d) ||
+    mo < 1 ||
+    mo > 12 ||
+    d < 1 ||
+    d > 31
+  ) {
+    return undefined;
+  }
+  // Stable UTC noon for the calendar date:
+  return new Date(Date.UTC(y, mo - 1, d, 12, 0, 0));
+}
+
+/**
+ * Serialize a user record to the public/owner-aware payload.
+ * Owner sees owner-only fields; non-owner respects visibility flags.
+ * DOB is returned as "YYYY-MM-DD" (or null).
+ */
 function serializeProfile(u: any, opts: { isOwner: boolean }) {
   if (!u) return null;
 
@@ -32,18 +84,20 @@ function serializeProfile(u: any, opts: { isOwner: boolean }) {
     showCountry: !!u.showCountry
   };
 
+  const industries =
+    (u.industries || []).map((ui: any) => ({
+      slug: ui.industry.slug,
+      name: ui.industry.name
+    })) ?? [];
+
   const base: any = {
     id: u.id,
     username: u.username ?? null,
     displayName: u.displayName,
     avatarKey: u.avatarKey ?? null,
-    avatarUrl: u.avatarUrl ?? null,
+    avatarUrl: u.avatarUrl ?? null, // if you store external avatar URLs
     bannerKey: u.bannerKey ?? null,
-    industries:
-      (u.industries || []).map((ui: any) => ({
-        slug: ui.industry.slug,
-        name: ui.industry.name
-      })) ?? [],
+    industries,
     ...flags,
     isOwner: opts.isOwner
   };
@@ -52,28 +106,20 @@ function serializeProfile(u: any, opts: { isOwner: boolean }) {
     base.email = u.email ?? null;
     base.country = u.country ?? null;
     base.religion = u.religion ?? null;
-    base.dateOfBirth = u.dateOfBirth ? u.dateOfBirth.toISOString() : null;
+    base.dateOfBirth = toYMD(u.dateOfBirth);
     base.phone = u.phone ?? null;
   } else {
     base.email = flags.showEmail ? u.email ?? null : null;
     base.country = flags.showCountry ? u.country ?? null : null;
     base.religion = flags.showReligion ? u.religion ?? null : null;
-    base.dateOfBirth = flags.showDateOfBirth
-      ? u.dateOfBirth
-        ? u.dateOfBirth.toISOString()
-        : null
-      : null;
+    base.dateOfBirth = flags.showDateOfBirth ? toYMD(u.dateOfBirth) : null;
     base.phone = flags.showPhone ? u.phone ?? null : null;
   }
 
   return base;
 }
 
-function toDateOrNull(s?: string) {
-  if (!s) return undefined;
-  const d = new Date(`${s}T00:00:00.000Z`);
-  return isNaN(+d) ? undefined : d;
-}
+/* ==================== Controllers ==================== */
 
 /** GET /api/profile — requires session, returns own profile */
 export async function getProfile(req: Request, res: Response) {
@@ -98,6 +144,8 @@ export async function getProfile(req: Request, res: Response) {
 export async function updateProfile(req: Request, res: Response) {
   if (!req.user?.uid) return sendUnauthorized(res);
   try {
+    // Validate body (ensure schema allows: avatarKey/bannerKey: string|null|undefined,
+    // dateOfBirth: string|null|undefined)
     const input = updateMyProfileSchema.parse(req.body);
 
     // username uniqueness (if changing)
@@ -109,7 +157,7 @@ export async function updateProfile(req: Request, res: Response) {
       if (existing) return sendConflict(res, 'Username is already taken');
     }
 
-    // industries upsert
+    // industries upsert (replace all if provided)
     let industriesData:
       | {
           deleteMany: Record<string, never>;
@@ -121,6 +169,7 @@ export async function updateProfile(req: Request, res: Response) {
       const uniqueSlugs = Array.from(
         new Set(input.industries.map(s => s.toLowerCase()))
       );
+
       const inds = await Promise.all(
         uniqueSlugs.map(async slug => {
           const name = slug
@@ -133,22 +182,25 @@ export async function updateProfile(req: Request, res: Response) {
           });
         })
       );
+
       industriesData = {
         deleteMany: {},
         create: inds.map(ind => ({ industryId: ind.id }))
       };
     }
 
-    // Build data map; undefined => don't touch, null => clear
+    // Build data map; undefined => don't touch, null => clear (for nullable fields)
     const data: any = {
       username: input.username ?? undefined,
       displayName: input.displayName ?? undefined,
       email: input.email ?? undefined,
       country: input.country ?? undefined,
       religion: input.religion ?? undefined,
-      dateOfBirth: input.dateOfBirth
-        ? toDateOrNull(input.dateOfBirth)
-        : undefined,
+      dateOfBirth:
+        // Interpret based on input value type (see toDateOrNull docs above)
+        input.dateOfBirth !== undefined
+          ? toDateOrNull(input.dateOfBirth as string | null)
+          : undefined,
       phone: input.phone ?? undefined,
 
       showEmail: input.showEmail ?? undefined,
@@ -160,9 +212,9 @@ export async function updateProfile(req: Request, res: Response) {
       ...(industriesData ? { industries: industriesData } : {})
     };
 
-    // allow clearing image columns by sending null
-    if ('avatarKey' in input) data.avatarKey = input.avatarKey;
-    if ('bannerKey' in input) data.bannerKey = input.bannerKey;
+    // Allow clearing image columns by sending null; updating by sending string
+    if ('avatarKey' in input) data.avatarKey = input.avatarKey; // string|null
+    if ('bannerKey' in input) data.bannerKey = input.bannerKey; // string|null
 
     const updated = await prisma.user.update({
       where: { id: req.user.uid },
@@ -212,7 +264,7 @@ export async function getPublicProfileById(req: Request, res: Response) {
   }
 }
 
-/** PUBLIC: GET /api/profiles/public — list public profiles (paginated) */
+/** PUBLIC: GET /api/profiles/public — list public profiles (paginated, optional search) */
 export async function listPublicProfiles(req: Request, res: Response) {
   try {
     const limit = Math.min(
