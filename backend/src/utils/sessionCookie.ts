@@ -12,6 +12,7 @@ export type SessionPayload = {
   phone?: string | null; // sensitive (opt-in)
   religion?: string | null; // sensitive (opt-in)
   country?: string | null;
+  role?: 'ADMIN' | 'USER';
 };
 
 const COOKIE_NAME = env.SESSION_COOKIE_NAME;

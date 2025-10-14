@@ -16,6 +16,7 @@ import uploadsRoutes from './routes/uploadRoutes.js';
 import { errorHandler } from './middlewares/error.js';
 import portfolioRoutes from './routes/portfolioRoutes.js';
 import challengeRoutes from './routes/challengeRoutes.js';
+import adminRoutes from './routes/adminRoutes.js';
 
 const app = express();
 
@@ -49,6 +50,8 @@ app.use('/api', profileRoutes);
 app.use('/api', digitalCardRoutes);
 app.use('/api', portfolioRoutes);
 app.use('/api', challengeRoutes);
+app.use('/api/admin', adminRoutes);
+
 
 /* 404 */
 app.use((_req, res) => {

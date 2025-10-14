@@ -72,6 +72,8 @@ function toDateOrNull(s?: string | null): Date | null | undefined {
  * Serialize a user record to the public/owner-aware payload.
  * Owner sees owner-only fields; non-owner respects visibility flags.
  * DOB is returned as "YYYY-MM-DD" (or null).
+ *
+ * 🔑 IMPORTANT: We now include `role` for the owner, so the frontend can show Admin UI.
  */
 function serializeProfile(u: any, opts: { isOwner: boolean }) {
   if (!u) return null;
@@ -103,12 +105,16 @@ function serializeProfile(u: any, opts: { isOwner: boolean }) {
   };
 
   if (opts.isOwner) {
+    // 🔑 Expose role to the owner (needed by frontend to render Admin)
+    base.role = u.role ?? 'USER';
+
     base.email = u.email ?? null;
     base.country = u.country ?? null;
     base.religion = u.religion ?? null;
     base.dateOfBirth = toYMD(u.dateOfBirth);
     base.phone = u.phone ?? null;
   } else {
+    // Public view — do NOT expose role
     base.email = flags.showEmail ? u.email ?? null : null;
     base.country = flags.showCountry ? u.country ?? null : null;
     base.religion = flags.showReligion ? u.religion ?? null : null;
@@ -121,7 +127,7 @@ function serializeProfile(u: any, opts: { isOwner: boolean }) {
 
 /* ==================== Controllers ==================== */
 
-/** GET /api/profile — requires session, returns own profile */
+/** GET /api/profile — requires session, returns own profile (includes role) */
 export async function getProfile(req: Request, res: Response) {
   if (!req.user?.uid) return sendUnauthorized(res);
   try {
@@ -144,8 +150,7 @@ export async function getProfile(req: Request, res: Response) {
 export async function updateProfile(req: Request, res: Response) {
   if (!req.user?.uid) return sendUnauthorized(res);
   try {
-    // Validate body (ensure schema allows: avatarKey/bannerKey: string|null|undefined,
-    // dateOfBirth: string|null|undefined)
+    // Validate body
     const input = updateMyProfileSchema.parse(req.body);
 
     // username uniqueness (if changing)
@@ -174,7 +179,7 @@ export async function updateProfile(req: Request, res: Response) {
         uniqueSlugs.map(async slug => {
           const name = slug
             .replace(/-/g, ' ')
-            .replace(/\b\w/g, c => c.toUpperCase());
+            .replace(/\b\w/g, (c: string) => c.toUpperCase());
           return prisma.industry.upsert({
             where: { slug },
             update: {},
@@ -197,7 +202,6 @@ export async function updateProfile(req: Request, res: Response) {
       country: input.country ?? undefined,
       religion: input.religion ?? undefined,
       dateOfBirth:
-        // Interpret based on input value type (see toDateOrNull docs above)
         input.dateOfBirth !== undefined
           ? toDateOrNull(input.dateOfBirth as string | null)
           : undefined,

@@ -36,6 +36,11 @@ enum ChallengeStatus {
   CLOSED
   ARCHIVED
 }
+enum UserRole {
+  ADMIN
+  USER
+}
+
 
 model User {
   id            String            @id @default(cuid())
@@ -52,6 +57,8 @@ model User {
   religion      String?
   dateOfBirth   DateTime?
   phone         String?
+
+  role          UserRole @default(USER)
 
   // field-level privacy toggles (false = private by default)
   showEmail         Boolean       @default(false)
