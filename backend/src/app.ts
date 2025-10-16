@@ -1,4 +1,3 @@
-// src/app.ts
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
@@ -21,10 +20,6 @@ import adminRoutes from './routes/adminRoutes.js';
 
 const app = express();
 
-// If running on Vercel, the function already lives at /api
-// so don't double-prefix; otherwise use '/api' locally.
-const BASE = process.env.VERCEL ? '' : '/api';
-
 /* Security & essentials */
 app.use(helmet());
 app.use(cors({ origin: env.CORS_ORIGIN, credentials: true }));
@@ -46,15 +41,17 @@ app.use(
 app.use(attachUserFromSession);
 
 /* Routes */
-app.use(BASE, uploadsRoutes);
-app.use(BASE, healthRoutes);
-app.use(BASE, indexRoutes);
-app.use(BASE, sessionRoutes);
-app.use(BASE, profileRoutes);
-app.use(BASE, digitalCardRoutes);
-app.use(BASE, portfolioRoutes);
-app.use(BASE, challengeRoutes);
-app.use(`${BASE}/admin`, adminRoutes);
+
+app.use('/api', uploadsRoutes);
+app.use('/api', healthRoutes);
+app.use('/api', indexRoutes);
+app.use('/api', sessionRoutes);
+app.use('/api', profileRoutes);
+app.use('/api', digitalCardRoutes);
+app.use('/api', portfolioRoutes);
+app.use('/api', challengeRoutes);
+app.use('/api/admin', adminRoutes);
+
 
 /* 404 */
 app.use((_req, res) => {
