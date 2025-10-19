@@ -28,7 +28,8 @@
     "helmet": "^7.1.0",
     "jsonwebtoken": "^9.0.2",
     "morgan": "^1.10.0",
-    "stripe": "^19.1.0"
+    "stripe": "^19.1.0",
+    "zod": "^4.1.12"
   },
   "devDependencies": {
     "@types/cookie-parser": "^1.4.7",
