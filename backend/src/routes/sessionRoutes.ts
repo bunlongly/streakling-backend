@@ -11,6 +11,7 @@ import {
 import { upsertUserFromClerk } from '../services/userService.js';
 import { createClerkClient, verifyToken } from '@clerk/backend';
 import { env } from '../config/env.js';
+import { prisma } from '../config/prisma.js';
 
 const router = Router();
 const clerk = createClerkClient({ secretKey: env.CLERK_SECRET_KEY });
@@ -47,7 +48,7 @@ router.post('/session/login', async (req, res) => {
         : cu.fullName || 'User';
     const avatarUrl = cu.imageUrl ?? null;
 
-    // IMPORTANT: don't default to null — use undefined when missing so we don't overwrite.
+    // IMPORTANT: use undefined (not null) to avoid overwriting with nulls
     const sensitive = (req.body?.sensitive ?? {}) as {
       phone?: string | null;
       religion?: string | null;
@@ -65,7 +66,7 @@ router.post('/session/login', async (req, res) => {
       religion: sensitive.religion ?? undefined
     });
 
-    // Set signed, httpOnly cookie
+    // Set signed, httpOnly cookie (your existing util)
     setSessionCookie(res, {
       uid: user.id,
       cid: user.clerkId,
@@ -88,6 +89,48 @@ router.post('/session/login', async (req, res) => {
 router.post('/session/logout', async (_req, res) => {
   clearSessionCookie(res);
   return sendSuccess(res, null, 'Logged out');
+});
+
+/**
+ * ✅ NEW: GET /api/session/me
+ * Returns minimal user + billing fields for your Billing page.
+ * Assumes you already attach `req.user` elsewhere (like you do for /billing/*).
+ * If not, you can read your cookie inside this handler instead.
+ */
+router.get('/session/me', async (req, res) => {
+  const u = (req as any).user; // set by your auth/session middleware
+  if (!u?.id) return sendUnauthorized(res, 'Unauthorized');
+
+  const user = await prisma.user.findUnique({
+    where: { id: u.id },
+    select: {
+      id: true,
+      email: true,
+      displayName: true,
+      plan: true,
+      subscriptionStatus: true,
+      currentPeriodEnd: true,
+      stripeCustomerId: true
+    }
+  });
+
+  if (!user) return sendUnauthorized(res, 'Unauthorized');
+
+  return sendSuccess(
+    res,
+    {
+      user: {
+        id: user.id,
+        email: user.email,
+        displayName: user.displayName,
+        plan: (user.plan ?? 'free') as 'free' | 'basic' | 'pro' | 'ultimate',
+        subscriptionStatus: user.subscriptionStatus ?? null,
+        currentPeriodEnd: user.currentPeriodEnd?.toISOString() ?? null,
+        stripeCustomerId: user.stripeCustomerId ?? null
+      }
+    },
+    'OK'
+  );
 });
 
 export default router;

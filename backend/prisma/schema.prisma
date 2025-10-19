@@ -73,11 +73,38 @@ model User {
   // industries/categories (many-to-many)
   industries     UserIndustry[]
 
+  stripeCustomerId   String?   @unique
+  plan               String?   // "free" | "basic" | "pro" | "ultimate"
+  subscriptionStatus String?   // "active" | "trialing" | "canceled" | ...
+  currentPeriodEnd   DateTime?
+
+  subscriptions      Subscription[]
+  
+
   createdAt     DateTime          @default(now())
   updatedAt     DateTime          @updatedAt
   digitalCards  DigitalNameCard[]
   portfolios    Portfolio[]
 }
+
+
+model Subscription {
+  id                 String   @id @default(cuid())
+  userId             String
+  user               User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  stripeSubId        String   @unique
+  stripePriceId      String
+  status             String
+  currentPeriodEnd   DateTime?
+
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  @@index([userId])
+  @@index([status])
+}
+
 
 model Industry {
   id        String          @id @default(cuid())

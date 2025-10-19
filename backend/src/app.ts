@@ -17,6 +17,7 @@ import { errorHandler } from './middlewares/error.js';
 import portfolioRoutes from './routes/portfolioRoutes.js';
 import challengeRoutes from './routes/challengeRoutes.js';
 import adminRoutes from './routes/adminRoutes.js';
+import billingRoutes from './routes/billingRoutes.js';
 
 const app = express();
 
@@ -52,7 +53,7 @@ app.use('/api', portfolioRoutes);
 app.use('/api', challengeRoutes);
 app.use('/api/admin', adminRoutes);
 
-
+app.use('/api', billingRoutes);
 /* 404 */
 app.use((_req, res) => {
   res.status(404).json({ status: 'fail', message: 'Route not found' });

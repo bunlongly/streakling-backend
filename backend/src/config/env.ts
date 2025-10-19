@@ -30,6 +30,14 @@ export const env = {
   COOKIE_SAMESITE: (process.env.COOKIE_SAMESITE ?? 'lax') as
     | 'lax' | 'strict' | 'none',
 
+  STRIPE_SECRET_KEY: required('STRIPE_SECRET_KEY'),
+  STRIPE_PUBLISHABLE_KEY: required('STRIPE_PUBLISHABLE_KEY'),
+  STRIPE_PRICE_BASIC: required('STRIPE_PRICE_BASIC'),
+  STRIPE_PRICE_PRO: required('STRIPE_PRICE_PRO'),
+  STRIPE_PRICE_ULTIMATE: required('STRIPE_PRICE_ULTIMATE'),
+  STRIPE_PORTAL_RETURN_URL:
+  process.env.STRIPE_PORTAL_RETURN_URL ?? 'http://localhost:3000/settings/billing',
+
   // S3
   AWS_REGION: required('AWS_REGION'),
   AWS_S3_BUCKET: required('AWS_S3_BUCKET'),

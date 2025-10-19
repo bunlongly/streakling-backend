@@ -10,9 +10,9 @@
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "prisma:studio": "prisma studio",
-     "db:seed": "pnpm prisma db seed"
+    "db:seed": "prisma db seed"
   },
-    "prisma": {
+  "prisma": {
     "seed": "tsx prisma/seed.ts"
   },
   "dependencies": {
@@ -27,7 +27,8 @@
     "express-rate-limit": "^7.4.0",
     "helmet": "^7.1.0",
     "jsonwebtoken": "^9.0.2",
-    "morgan": "^1.10.0"
+    "morgan": "^1.10.0",
+    "stripe": "^19.1.0"
   },
   "devDependencies": {
     "@types/cookie-parser": "^1.4.7",
