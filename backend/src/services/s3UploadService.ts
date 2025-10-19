@@ -1,8 +1,9 @@
 import { PutObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { randomUUID } from 'crypto';
-import { s3, s3ObjectUrl } from '../config/s3';
-import { env } from '../config/env';
+import { s3, s3ObjectUrl } from '../config/s3.js';
+import { env } from '../config/env.js';
+
 
 export type UploadCategory = 'digitalcard' | 'portfolio' | 'profile' | 'challenge';
 export type UploadPurpose = 'avatar' | 'banner' | 'cover' | 'media'; // extend as needed
