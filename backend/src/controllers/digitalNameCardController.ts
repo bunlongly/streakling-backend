@@ -7,7 +7,7 @@ import {
   sendConflict,
   sendNotFound,
   sendError
-} from '../utils/reponseHandller';
+} from '../utils/responseHandler';
 import type {
   CreateDigitalCardInput,
   UpdateDigitalCardInput
@@ -301,7 +301,10 @@ export async function listPublishedCards(req: Request, res: Response) {
       cursor?: string;
     };
 
-    const pageSize = Math.min(Math.max(parseInt(String(take || 24), 10) || 24, 1), 100);
+    const pageSize = Math.min(
+      Math.max(parseInt(String(take || 24), 10) || 24, 1),
+      100
+    );
 
     const where = {
       publishStatus: 'PUBLISHED' as const,

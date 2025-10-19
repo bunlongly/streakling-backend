@@ -4,7 +4,7 @@ import {
   sendSuccess,
   sendUnauthorized,
   sendError
-} from '../utils/reponseHandller';
+} from '../utils/responseHandler';
 import { getPresignedPutUrl } from '../services/s3UploadService';
 import type { SignUploadInput } from '../schemas/upload';
 

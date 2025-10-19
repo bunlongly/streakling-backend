@@ -7,7 +7,7 @@ import {
   sendNotFound,
   sendUnauthorized,
   sendConflict
-} from '../utils/reponseHandller';
+} from '../utils/responseHandler';
 import {
   createPortfolioSchema,
   updatePortfolioSchema

@@ -3,7 +3,7 @@ import {
   sendBadRequest,
   sendSuccess,
   sendUnauthorized
-} from '../utils/reponseHandller.js';
+} from '../utils/responseHandler.js';
 import {
   setSessionCookie,
   clearSessionCookie

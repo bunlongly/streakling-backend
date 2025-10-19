@@ -6,7 +6,7 @@ import {
   sendNotFound,
   sendError,
   sendConflict
-} from '../utils/reponseHandller';
+} from '../utils/responseHandler';
 import {
   createChallengeSchema,
   updateChallengeSchema,
