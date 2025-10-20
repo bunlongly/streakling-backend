@@ -268,7 +268,6 @@ export async function getPublicProfileById(req: Request, res: Response) {
   }
 }
 
-/** PUBLIC: GET /api/profiles/public — list public profiles (paginated, optional search) */
 export async function listPublicProfiles(req: Request, res: Response) {
   try {
     const limit = Math.min(
@@ -276,15 +275,43 @@ export async function listPublicProfiles(req: Request, res: Response) {
       60
     );
     const cursor = (req.query.cursor as string | undefined) || undefined;
-    const q = (req.query.q as string | undefined)?.trim();
+    const qRaw = (req.query.q as string | undefined) ?? '';
+    const q = qRaw.trim();
+    const qLower = q.toLowerCase();
 
-    const where: any = {};
+    // Require meaningful username for public listing
+    const mustHaveUsername = {
+      AND: [{ username: { not: null } }, { username: { not: '' } }]
+    };
+
+    let where: any = { ...mustHaveUsername };
+
     if (q) {
-      where.OR = [
-        { username: { contains: q, mode: 'insensitive' } },
-        { displayName: { contains: q, mode: 'insensitive' } },
-        { country: { contains: q, mode: 'insensitive' } }
-      ];
+      where = {
+        AND: [
+          mustHaveUsername,
+          {
+            OR: [
+              // NOTE: no `mode: 'insensitive'` — rely on DB collation
+              { username: { contains: q } },
+              { displayName: { contains: q } },
+              { country: { contains: q } },
+              {
+                industries: {
+                  some: {
+                    industry: {
+                      OR: [
+                        { name: { contains: q } }, // case-insensitive under CI collation
+                        { slug: { contains: qLower } } // slugs stored lowercase
+                      ]
+                    }
+                  }
+                }
+              }
+            ]
+          }
+        ]
+      };
     }
 
     const rows = await prisma.user.findMany({

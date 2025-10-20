@@ -477,7 +477,7 @@ export async function prefillPortfolioFromCard(req: Request, res: Response) {
   }
 }
 
-// PUBLIC: GET /portfolios/public — list all published portfolios (paginated)
+// PUBLIC: GET /portfolios/public — list all published portfolios (paginated) + q search
 export async function listPublicPortfolios(req: Request, res: Response) {
   try {
     const limit = Math.min(
@@ -485,10 +485,70 @@ export async function listPublicPortfolios(req: Request, res: Response) {
       60
     );
     const cursor = (req.query.cursor as string | undefined) || undefined;
+    const qRaw = (req.query.q as string | undefined) || '';
+    const q = qRaw.trim();
+
+    // Base filter
+    const whereBase: Record<string, unknown> = { publishStatus: 'PUBLISHED' };
+
+    // Build an OR for title/description only (always supported)
+    const or: Record<string, unknown>[] = [];
+    if (q.length > 0) {
+      or.push(
+        { title: { contains: q } },
+        { description: { contains: q } },
+        { title: { contains: q.toLowerCase() } },
+        { description: { contains: q.toLowerCase() } },
+        { title: { contains: q.toUpperCase() } },
+        { description: { contains: q.toUpperCase() } }
+      );
+    }
+
+    // OPTIONAL: try to include tags filtering for JSON/other providers.
+    // Some Prisma providers support JSON path filters (string_contains via `path`),
+    // others support `array_contains` on JSON arrays, and String[] supports `has`.
+    // We'll test ONE candidate at runtime; if it fails, we just skip tag filtering.
+    if (q.length > 0) {
+      const tagCandidates: Record<string, unknown>[] = [
+        // String[] list (Postgres/MySQL): has
+        { tags: { has: q } },
+        // JSON array (some providers): array_contains
+        { tags: { array_contains: q } },
+        // JSON path string search (Prisma 5+, provider dependent)
+        // Meaning: check if any string within `tags` contains q
+        {
+          tags: {
+            path: [],
+            // string_contains applies at the path; empty path = the field itself
+            // Works if `tags` is a JSON array of strings and provider supports it
+            string_contains: q
+          }
+        }
+      ];
+
+      // Try to detect a working candidate just once.
+      // We run a tiny probe query; if it errors, we skip that candidate.
+      for (const cand of tagCandidates) {
+        try {
+          // probe (fast: select id only, take 1)
+          await prisma.portfolio.findFirst({
+            where: { ...whereBase, ...cand },
+            select: { id: true }
+          });
+          // If we got here without throwing, include this candidate in OR and stop trying others
+          or.push(cand);
+          break;
+        } catch {
+          // ignore and try next candidate
+        }
+      }
+    }
+
+    const where = or.length > 0 ? { ...whereBase, OR: or } : { ...whereBase };
 
     const rows = await prisma.portfolio.findMany({
-      where: { publishStatus: 'PUBLISHED' },
-      orderBy: { id: 'desc' }, // 👈 stable and unique
+      where,
+      orderBy: { id: 'desc' }, // stable and unique for cursor pagination
       take: limit + 1,
       ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
       include: fullInclude

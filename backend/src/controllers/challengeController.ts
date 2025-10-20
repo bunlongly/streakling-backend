@@ -96,6 +96,12 @@ function serializeChallenge(c: any, opts: { isOwner: boolean }) {
 }
 
 function serializeSubmission(s: any) {
+  // single cover image (if present)
+  const cover =
+    Array.isArray(s.challenge?.images) && s.challenge.images.length
+      ? s.challenge.images[0]
+      : null;
+
   return {
     id: s.id,
     challengeId: s.challengeId,
@@ -110,6 +116,28 @@ function serializeSubmission(s: any) {
     submitterPhone: s.submitterPhone ?? null,
     submitterSocials: s.submitterSocials ?? [],
 
+    // added fields for client convenience
+    challengeSlug: s.challenge?.slug ?? null,
+    challengeTitle: s.challenge?.title ?? null,
+
+    // richer challenge brief (for UI)
+    challenge: s.challenge
+      ? {
+          slug: s.challenge.slug,
+          title: s.challenge.title,
+          brandName: s.challenge.brandName ?? null,
+          postingUrl: s.challenge.postingUrl ?? null,
+          status: s.challenge.status ?? null,
+          publishStatus: s.challenge.publishStatus ?? null,
+          deadline: s.challenge.deadline
+            ? s.challenge.deadline.toISOString()
+            : null,
+          cover: cover
+            ? { key: cover.key ?? null, url: cover.url ?? null }
+            : null
+        }
+      : null,
+
     submissionOrder: s.submissionOrder,
     status: s.status,
     createdAt: s.createdAt.toISOString(),
@@ -119,7 +147,7 @@ function serializeSubmission(s: any) {
 
 // ---------------- Owner CRUD ----------------
 export async function createChallenge(req: Request, res: Response) {
-  const uid = req.user?.uid;
+  const uid = (req as any).user?.uid;
   if (!uid) return sendUnauthorized(res);
 
   try {
@@ -191,7 +219,7 @@ export async function createChallenge(req: Request, res: Response) {
 }
 
 export async function listMyChallenges(req: Request, res: Response) {
-  const uid = req.user?.uid;
+  const uid = (req as any).user?.uid;
   if (!uid) return sendUnauthorized(res);
 
   try {
@@ -213,7 +241,7 @@ export async function listMyChallenges(req: Request, res: Response) {
 }
 
 export async function getMyChallengeById(req: Request, res: Response) {
-  const uid = req.user?.uid;
+  const uid = (req as any).user?.uid;
   if (!uid) return sendUnauthorized(res);
 
   try {
@@ -233,7 +261,7 @@ export async function getMyChallengeById(req: Request, res: Response) {
 }
 
 export async function updateChallenge(req: Request, res: Response) {
-  const uid = req.user?.uid;
+  const uid = (req as any).user?.uid;
   if (!uid) return sendUnauthorized(res);
 
   try {
@@ -324,7 +352,7 @@ export async function updateChallenge(req: Request, res: Response) {
 }
 
 export async function deleteChallenge(req: Request, res: Response) {
-  const uid = req.user?.uid;
+  const uid = (req as any).user?.uid;
   if (!uid) return sendUnauthorized(res);
 
   try {
@@ -395,7 +423,7 @@ export async function getPublicChallengeBySlug(req: Request, res: Response) {
       }
     });
     if (!c) return sendNotFound(res, 'Challenge not found');
-    const isOwner = req.user?.uid === c.userId;
+    const isOwner = (req as any).user?.uid === c.userId;
     return sendSuccess(res, serializeChallenge(c, { isOwner }), 'Challenge');
   } catch (e: unknown) {
     return sendError(res, errMsg(e));
@@ -404,7 +432,7 @@ export async function getPublicChallengeBySlug(req: Request, res: Response) {
 
 // ---------------- Submissions ----------------
 export async function createSubmission(req: Request, res: Response) {
-  const uid = req.user?.uid;
+  const uid = (req as any).user?.uid;
   if (!uid) return sendUnauthorized(res);
 
   try {
@@ -416,14 +444,12 @@ export async function createSubmission(req: Request, res: Response) {
       return sendNotFound(res, 'Challenge is not open');
     }
 
-    // One per user per challenge
     const found = await prisma.challengeSubmission.findFirst({
       where: { challengeId: id, submitterId: uid }
     });
     if (found)
       return sendConflict(res, 'You have already submitted to this challenge.');
 
-    // Snapshot: name / phone / public socials from latest published DigitalNameCard
     const user = await prisma.user.findUnique({
       where: { id: uid },
       select: { displayName: true, phone: true }
@@ -435,12 +461,14 @@ export async function createSubmission(req: Request, res: Response) {
       select: { id: true }
     });
 
-    let socials: Array<{
-      platform: string;
-      handle?: string | null;
-      url?: string | null;
-      label?: string | null;
-    }> = [];
+    let socials:
+      | Array<{
+          platform: string;
+          handle?: string | null;
+          url?: string | null;
+          label?: string | null;
+        }>
+      | [] = [];
     if (card?.id) {
       const rows = await prisma.socialAccount.findMany({
         where: { cardId: card.id, isPublic: true },
@@ -491,10 +519,9 @@ export async function createSubmission(req: Request, res: Response) {
 
 /**
  * DELETE /challenges/:id/submissions
- * Withdraw (unsubmit) the current user's submission for this challenge.
  */
 export async function withdrawMySubmission(req: Request, res: Response) {
-  const uid = req.user?.uid;
+  const uid = (req as any).user?.uid;
   if (!uid) return sendUnauthorized(res);
 
   try {
@@ -515,8 +542,7 @@ export async function withdrawMySubmission(req: Request, res: Response) {
 /**
  * GET /challenges/:id/submissions
  * - Public ordered list by default
- * - If ?mine=1 (1/true also accepted), returns ONLY the current user's submission (requires auth)
- *   Quiet UX: returns 200 with `null` when the user has not submitted.
+ * - If ?mine=1, returns ONLY the current user's submission
  */
 export async function listSubmissions(req: Request, res: Response) {
   const mineFlag =
@@ -526,7 +552,7 @@ export async function listSubmissions(req: Request, res: Response) {
     (req.query.mine as any) === true;
 
   if (mineFlag) {
-    const uid = req.user?.uid;
+    const uid = (req as any).user?.uid;
     if (!uid) return sendUnauthorized(res);
 
     const { id } = req.params;
@@ -535,11 +561,9 @@ export async function listSubmissions(req: Request, res: Response) {
       where: { challengeId: id, submitterId: uid }
     });
 
-    // Quiet UX: 200 with null (instead of 404 "Not submitted")
     return sendSuccess(res, s ? serializeSubmission(s) : null);
   }
 
-  // ----- public list -----
   try {
     const { id } = req.params;
     const limit = Math.min(
@@ -570,26 +594,47 @@ export async function listSubmissions(req: Request, res: Response) {
 
 /**
  * GET /submissions
- * List the current user's submissions across all challenges (no /me in path)
+ * List current user's submissions across challenges (with challenge brief)
  */
 export async function listMySubmissions(req: Request, res: Response) {
-  const uid = req.user?.uid;
+  const uid = (req as any).user?.uid;
   if (!uid) return sendUnauthorized(res);
 
   try {
     const rows = await prisma.challengeSubmission.findMany({
       where: { submitterId: uid },
-      orderBy: [{ createdAt: 'desc' }]
+      orderBy: [{ createdAt: 'desc' }],
+      include: {
+        challenge: {
+          select: {
+            id: true,
+            slug: true,
+            title: true,
+            brandName: true,
+            postingUrl: true,
+            status: true,
+            publishStatus: true,
+            deadline: true,
+            // first image only for compact card
+            images: {
+              orderBy: { sortOrder: 'asc' },
+              take: 1,
+              select: { key: true, url: true }
+            }
+          }
+        }
+      }
     });
+
     return sendSuccess(res, rows.map(serializeSubmission));
   } catch (e: unknown) {
     return sendError(res, errMsg(e));
   }
 }
 
-/** PATCH /challenges/:challengeId/submissions/:submissionId/status — owner moderation */
+/** PATCH /challenges/:challengeId/submissions/:submissionId/status */
 export async function updateSubmissionStatus(req: Request, res: Response) {
-  const uid = req.user?.uid;
+  const uid = (req as any).user?.uid;
   if (!uid) return sendUnauthorized(res);
 
   try {
