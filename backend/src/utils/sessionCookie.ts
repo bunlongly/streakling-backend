@@ -1,38 +1,40 @@
 import jwt from 'jsonwebtoken';
-import type { Response, Request } from 'express';
+import type { CookieOptions, Response, Request } from 'express';
 import { env } from '../config/env.js';
-import { sessionCookieOptions } from './cookies.js';
 
 export type SessionPayload = {
-  uid: string;
-  cid: string;
+  uid: string; // local user id
+  cid: string; // clerk user id
   username?: string | null;
   email?: string | null;
   displayName: string;
   avatarUrl?: string | null;
-  phone?: string | null;
-  religion?: string | null;
+  phone?: string | null; // sensitive (opt-in)
+  religion?: string | null; // sensitive (opt-in)
   country?: string | null;
   role?: 'ADMIN' | 'USER';
 };
 
 const COOKIE_NAME = env.SESSION_COOKIE_NAME;
+const COOKIE_OPTIONS: CookieOptions = {
+  httpOnly: true,
+  secure: env.COOKIE_SECURE,
+  sameSite: env.COOKIE_SAMESITE,
+  domain: env.COOKIE_DOMAIN,
+  path: '/',
+  maxAge: 60 * 60 * 1000 // 1 hour
+};
 
-export function setSessionCookie(
-  req: Request,
-  res: Response,
-  payload: SessionPayload
-) {
+export function setSessionCookie(res: Response, payload: SessionPayload) {
   const token = jwt.sign(payload, env.SESSION_SECRET, {
     algorithm: 'HS256',
     expiresIn: '1h'
   });
-  res.cookie(COOKIE_NAME, token, sessionCookieOptions(req.headers.host));
+  res.cookie(COOKIE_NAME, token, COOKIE_OPTIONS);
 }
 
-export function clearSessionCookie(req: Request, res: Response) {
-  const opts = sessionCookieOptions(req.headers.host);
-  res.clearCookie(COOKIE_NAME, { ...opts, maxAge: undefined });
+export function clearSessionCookie(res: Response) {
+  res.clearCookie(COOKIE_NAME, { ...COOKIE_OPTIONS, maxAge: undefined });
 }
 
 export function readSessionCookie(req: Request): SessionPayload | null {
