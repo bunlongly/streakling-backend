@@ -25,7 +25,7 @@ export const env = {
   // Session cookie
   SESSION_COOKIE_NAME: required('SESSION_COOKIE_NAME'),
   SESSION_SECRET: required('SESSION_SECRET'),
-  COOKIE_DOMAIN: required('COOKIE_DOMAIN'),
+  COOKIE_DOMAIN: process.env.COOKIE_DOMAIN || undefined,
   COOKIE_SECURE: (process.env.COOKIE_SECURE ?? 'false') === 'true',
   COOKIE_SAMESITE: (process.env.COOKIE_SAMESITE ?? 'lax') as
     | 'lax' | 'strict' | 'none',

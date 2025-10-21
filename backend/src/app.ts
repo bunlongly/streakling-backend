@@ -23,7 +23,16 @@ const app = express();
 
 /* Security & essentials */
 app.use(helmet());
-app.use(cors({ origin: env.CORS_ORIGIN, credentials: true }));
+app.use(
+  cors({
+    origin: env.CORS_ORIGIN, // http://localhost:3000 (dev) or https://streakling.com (prod)
+    credentials: true,
+    methods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'Cache-Control']
+  })
+);
+app.options('*', cors({ origin: env.CORS_ORIGIN, credentials: true }));
+
 app.use(express.json({ limit: '1mb' }));
 app.use(cookieParser());
 app.use(morgan(env.NODE_ENV === 'development' ? 'dev' : 'combined'));
